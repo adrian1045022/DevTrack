@@ -1,26 +1,20 @@
 @import "tailwindcss";
 
+@source "../app/**/*.{ts,tsx}";
+
+/* Ajustes base para que el gradiente y las sombras funcionen */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  background-color: #0a0a0a; /* Fondo oscuro por defecto */
+  color: white;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  /* El gradiente principal se define en el div del Dashboard para controlarlo */
 }
+
+/* Fuentes si quieres usar alguna personalizada, ej: Google Fonts */
+/* @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap'); */
+/* html, body { font-family: 'Inter', sans-serif; } */
