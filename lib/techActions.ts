@@ -1,172 +1,211 @@
 'use server';
-import { MongoClient, ObjectId } from 'mongodb';
+import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 
-const uri = process.env.MONGODB_URI!;
-let client: MongoClient;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-async function connectDB() {
-  if (!client) {
-    client = new MongoClient(uri);
-    await client.connect();
-  }
-  return client.db('DevTrack');
-}
-
-/* --- SECCIÓN PERSONAL (STACK) --- */
+/* ==========================================
+   DASHBOARD / STACK
+   ========================================== */
 
 export async function getTechnologies(userEmail: string) {
-  try {
-    const db = await connectDB();
-    const techs = await db.collection('technologies').find({ userEmail }).sort({ createdAt: -1 }).toArray();
-    return techs.map(t => ({
-      id: t._id.toString(),
-      name: t.name,
-      status: t.status,
-      streak: t.streak || 0,
-      lastCheck: t.lastCheck ? t.lastCheck.toISOString() : null,
-      resources: t.resources || [],
-      // BLINDAJE: Si notes no es array, devolvemos array vacío
-      notes: Array.isArray(t.notes) ? t.notes : []
-    }));
-  } catch (error) { return []; }
+  if (!userEmail) return [];
+  const { data, error } = await supabase
+    .from('technologies')
+    .select('*')
+    .eq('user_email', userEmail)
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return data;
 }
 
 export async function addTechnology(formData: FormData, userEmail: string) {
-  const techName = formData.get('techName') as string;
-  const db = await connectDB();
-  await db.collection('technologies').insertOne({
-    name: techName, userEmail, status: 'Estudiando', streak: 0, lastCheck: null, createdAt: new Date(), resources: [], notes: []
-  });
+  const name = formData.get('techName') as string;
+  await supabase.from('technologies').insert([{ 
+    name, user_email: userEmail, status: 'Aprendiendo', streak: 0, resources: [], notes: [] 
+  }]);
   revalidatePath('/dashboard');
 }
 
 export async function deleteTechnology(id: string) {
-  const db = await connectDB();
-  await db.collection('technologies').deleteOne({ _id: new ObjectId(id) });
+  await supabase.from('technologies').delete().eq('id', id);
+  revalidatePath('/dashboard');
+}
+
+/* ==========================================
+   RECURSOS Y NOTAS
+   ========================================== */
+
+export async function addResourceToTech(techId: string, url: string, name: string) {
+  const { data: tech } = await supabase.from('technologies').select('resources').eq('id', techId).single();
+  const current = Array.isArray(tech?.resources) ? tech.resources : [];
+  await supabase.from('technologies').update({ resources: [...current, { name, url, date: new Date().toISOString() }] }).eq('id', techId);
+  revalidatePath('/dashboard');
+}
+
+export async function removeResource(techId: string, url: string) {
+  const { data: tech } = await supabase.from('technologies').select('resources').eq('id', techId).single();
+  const filtered = (tech?.resources as any[] || []).filter(r => r.url !== url);
+  await supabase.from('technologies').update({ resources: filtered }).eq('id', techId);
   revalidatePath('/dashboard');
 }
 
 export async function addNoteToTech(techId: string, title: string, content: string) {
-  const db = await connectDB();
-  // Limpiamos datos antiguos si 'notes' era un string
-  const tech = await db.collection('technologies').findOne({ _id: new ObjectId(techId) });
-  if (tech && !Array.isArray(tech.notes)) {
-    await db.collection('technologies').updateOne({ _id: new ObjectId(techId) }, { $set: { notes: [] } });
-  }
-  
-  await (db.collection('technologies') as any).updateOne(
-    { _id: new ObjectId(techId) },
-    { $push: { notes: { id: new ObjectId().toString(), title, content, date: new Date() } } }
-  );
+  const { data: tech } = await supabase.from('technologies').select('notes').eq('id', techId).single();
+  const current = Array.isArray(tech?.notes) ? tech.notes : [];
+  const newNote = { id: crypto.randomUUID(), title, content, date: new Date().toISOString() };
+  await supabase.from('technologies').update({ notes: [...current, newNote] }).eq('id', techId);
   revalidatePath('/dashboard');
 }
 
 export async function removeNote(techId: string, noteId: string) {
-  const db = await connectDB();
-  await (db.collection('technologies') as any).updateOne(
-    { _id: new ObjectId(techId) },
-    { $pull: { notes: { id: noteId } } }
-  );
+  const { data: tech } = await supabase.from('technologies').select('notes').eq('id', techId).single();
+  const filtered = (tech?.notes as any[] || []).filter(n => n.id !== noteId);
+  await supabase.from('technologies').update({ notes: filtered }).eq('id', techId);
   revalidatePath('/dashboard');
 }
 
-export async function addResourceToTech(techId: string, fileUrl: string, fileName: string) {
-  const db = await connectDB();
-  await (db.collection('technologies') as any).updateOne(
-    { _id: new ObjectId(techId) },
-    { $push: { resources: { name: fileName, url: fileUrl, date: new Date() } } }
-  );
-  revalidatePath('/dashboard');
-}
-
-export async function removeResource(techId: string, fileUrl: string) {
-  const db = await connectDB();
-  await (db.collection('technologies') as any).updateOne(
-    { _id: new ObjectId(techId) },
-    { $pull: { resources: { url: fileUrl } } }
-  );
-  revalidatePath('/dashboard');
-}
-
-/* --- SECCIÓN COMUNIDAD --- */
+/* ==========================================
+   COMUNIDAD / HACKS
+   ========================================== */
 
 export async function getCommunityPosts() {
-  try {
-    const db = await connectDB();
-    const posts = await db.collection('community_posts').find({}).sort({ createdAt: -1 }).toArray();
-    return posts.map(p => ({
-      id: p._id.toString(),
-      title: p.title,
-      content: p.content,
-      tech: p.tech,
-      author: p.author,
-      authorEmail: p.authorEmail,
-      videoUrl: p.videoUrl || null,
-      likes: p.likes || [],
-      createdAt: p.createdAt ? p.createdAt.toISOString() : null
-    }));
-  } catch (error) { return []; }
-}
-
-export async function getMyPosts(userEmail: string) {
-  try {
-    const db = await connectDB();
-    const posts = await db.collection('community_posts').find({ authorEmail: userEmail }).sort({ createdAt: -1 }).toArray();
-    return posts.map(p => ({
-      id: p._id.toString(),
-      title: p.title,
-      tech: p.tech,
-      createdAt: p.createdAt ? p.createdAt.toISOString() : null
-    }));
-  } catch (error) { return []; }
+  const { data } = await supabase.from('community_posts').select('*').order('created_at', { ascending: false });
+  return data || [];
 }
 
 export async function createCommunityPost(title: string, content: string, tech: string, userEmail: string, videoUrl?: string) {
-  const db = await connectDB();
-  await db.collection('community_posts').insertOne({
-    title,
-    content,
-    tech: tech.toUpperCase(),
-    author: userEmail.split('@')[0],
-    authorEmail: userEmail,
+  await supabase.from('community_posts').insert([{ 
+    title, 
+    content, 
+    tech: tech.toUpperCase(), 
+    author: userEmail.split('@')[0], 
+    author_email: userEmail, 
+    video_url: videoUrl, 
     likes: [],
-    videoUrl: videoUrl || null,
-    createdAt: new Date()
-  });
+    saved_by: [] // AÑADIDO: Inicializa el array de guardados
+  }]);
   revalidatePath('/community');
-  revalidatePath('/profile');
-}
-
-export async function deleteCommunityPost(postId: string, userEmail: string) {
-  const db = await connectDB();
-  await db.collection('community_posts').deleteOne({ 
-    _id: new ObjectId(postId),
-    authorEmail: userEmail 
-  });
-  revalidatePath('/community');
-  revalidatePath('/profile');
 }
 
 export async function toggleLike(postId: string, userEmail: string) {
-  const db = await connectDB();
-  const post = await db.collection('community_posts').findOne({ _id: new ObjectId(postId) });
-  if (!post) return;
-  const hasLiked = post.likes?.includes(userEmail);
-  if (hasLiked) {
-    await (db.collection('community_posts') as any).updateOne({ _id: new ObjectId(postId) }, { $pull: { likes: userEmail } });
-  } else {
-    await (db.collection('community_posts') as any).updateOne({ _id: new ObjectId(postId) }, { $push: { likes: userEmail } });
-  }
+  const { data: post } = await supabase.from('community_posts').select('likes').eq('id', postId).single();
+  let likes = Array.isArray(post?.likes) ? post.likes : [];
+  likes = likes.includes(userEmail) ? likes.filter((e: string) => e !== userEmail) : [...likes, userEmail];
+  await supabase.from('community_posts').update({ likes }).eq('id', postId);
   revalidatePath('/community');
 }
 
-export async function cleanupOldPosts() {
-  const db = await connectDB();
-  // Borra todos los posts que NO tengan el campo authorEmail
-  await db.collection('community_posts').deleteMany({ 
-    authorEmail: { $exists: false } 
-  });
+/* ==========================================
+   SISTEMA DE FAVORITOS (NUEVO)
+   ========================================== */
+
+export async function toggleSavePost(postId: string, userEmail: string) {
+  const { data: post } = await supabase.from('community_posts').select('saved_by').eq('id', postId).single();
+  let savedBy = Array.isArray(post?.saved_by) ? post.saved_by : [];
+  
+  savedBy = savedBy.includes(userEmail) 
+    ? savedBy.filter((e: string) => e !== userEmail) 
+    : [...savedBy, userEmail];
+
+  await supabase.from('community_posts').update({ saved_by: savedBy }).eq('id', postId);
   revalidatePath('/community');
   revalidatePath('/profile');
+}
+
+export async function getSavedPosts(userEmail: string) {
+  if (!userEmail) return [];
+  const { data, error } = await supabase
+    .from('community_posts')
+    .select('*')
+    .contains('saved_by', [userEmail]) // Busca posts donde el email esté en el array
+    .order('created_at', { ascending: false });
+    
+  if (error) return [];
+  return data || [];
+}
+
+/* ==========================================
+   PERFIL Y GESTIÓN PROPIA
+   ========================================== */
+
+export async function getMyPosts(userEmail: string) {
+  if (!userEmail) return [];
+  const { data, error } = await supabase
+    .from('community_posts')
+    .select('*')
+    .eq('author_email', userEmail)
+    .order('created_at', { ascending: false });
+    
+  if (error) {
+    console.error("Error en getMyPosts:", error.message);
+    return [];
+  }
+  return data || [];
+}
+
+export async function deleteCommunityPost(postId: string, userEmail: string) {
+  await supabase.from('community_posts')
+    .delete()
+    .eq('id', postId)
+    .eq('author_email', userEmail);
+  revalidatePath('/community');
+  revalidatePath('/profile');
+}
+
+export async function getRelatedHacks(techName: string) {
+  const { data, error } = await supabase
+    .from('community_posts')
+    .select('*')
+    .eq('tech', techName.toUpperCase()) // Buscamos en mayúsculas para que coincida
+    .order('created_at', { ascending: false })
+    .limit(3); // Solo traemos los 3 más recientes para no saturar
+
+  if (error) return [];
+  return data || [];
+}
+
+// lib/techActions.ts
+
+// lib/techActions.ts
+
+export async function globalSearch(query: string, userEmail: string) {
+  if (!query || query.length < 2) return { myTechs: [], communityPosts: [] };
+
+  // 1. Buscamos en tus tecnologías usando la función RPC que creamos
+  const { data: myTechs, error: techError } = await supabase
+    .rpc('search_techs_by_notes', { 
+      search_term: query, 
+      user_email_input: userEmail 
+    });
+
+  // 2. Buscamos en la comunidad (esto es texto simple, no falla)
+  const { data: communityPosts, error: commError } = await supabase
+    .from('community_posts')
+    .select('*')
+    .or(`title.ilike.%${query}%,tech.ilike.%${query}%,content.ilike.%${query}%`)
+    .limit(5);
+
+  if (techError) console.error("Error RPC:", techError.message);
+
+  return {
+    myTechs: myTechs || [],
+    communityPosts: communityPosts || []
+  };
+}
+
+
+export async function updateTechStatus(techId: string, newStatus: string) {
+  const { error } = await supabase
+    .from('technologies')
+    .update({ status: newStatus })
+    .eq('id', techId);
+
+  if (error) {
+    console.error("Error actualizando status:", error.message);
+    return false;
+  }
+  return true;
 }

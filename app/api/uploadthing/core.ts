@@ -1,13 +1,19 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
+
 const f = createUploadthing();
 
 export const ourFileRouter = {
-  techAttachment: f({ pdf: { maxFileSize: "4MB" }, image: { maxFileSize: "4MB" } })
-    .onUploadComplete(async () => {}),
-
-  communityVideo: f({ video: { maxFileSize: "32MB", maxFileCount: 1 } })
+  // Ruta para los vídeos de la comunidad
+  communityVideo: f({ video: { maxFileSize: "128MB" } })
     .onUploadComplete(async ({ file }) => {
-      return { url: file.url };
+      console.log("Subida en UploadThing completada:", file.ufsUrl);
+      return { url: file.ufsUrl }; // Usamos la URL moderna
+    }),
+
+  // Ruta para otros archivos (opcional)
+  techAttachment: f({ image: { maxFileSize: "4MB" } })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl };
     }),
 } satisfies FileRouter;
 
