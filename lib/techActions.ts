@@ -39,9 +39,10 @@ export async function deleteTechnology(id: string) {
    ========================================== */
 
 export async function addResourceToTech(techId: string, url: string, name: string) {
-  const { data: tech } = await supabase.from('technologies').select('resources').eq('id', techId).single();
+  const { data: tech } = await supabase.from('technologies').select('resources, streak').eq('id', techId).single();
   const current = Array.isArray(tech?.resources) ? tech.resources : [];
-  await supabase.from('technologies').update({ resources: [...current, { name, url, date: new Date().toISOString() }] }).eq('id', techId);
+  const currentStreak = tech?.streak || 0;
+  await supabase.from('technologies').update({ resources: [...current, { name, url, date: new Date().toISOString() }], streak: currentStreak + 1 }).eq('id', techId);
   revalidatePath('/dashboard');
 }
 
@@ -53,10 +54,11 @@ export async function removeResource(techId: string, url: string) {
 }
 
 export async function addNoteToTech(techId: string, title: string, content: string) {
-  const { data: tech } = await supabase.from('technologies').select('notes').eq('id', techId).single();
+  const { data: tech } = await supabase.from('technologies').select('notes, streak').eq('id', techId).single();
   const current = Array.isArray(tech?.notes) ? tech.notes : [];
+  const currentStreak = tech?.streak || 0;
   const newNote = { id: crypto.randomUUID(), title, content, date: new Date().toISOString() };
-  await supabase.from('technologies').update({ notes: [...current, newNote] }).eq('id', techId);
+  await supabase.from('technologies').update({ notes: [...current, newNote], streak: currentStreak + 1 }).eq('id', techId);
   revalidatePath('/dashboard');
 }
 
@@ -208,4 +210,45 @@ export async function updateTechStatus(techId: string, newStatus: string) {
     return false;
   }
   return true;
+}
+
+/* ==========================================
+   GAMIFICACIÓN Y MINI-JUEGOS (GEMINI AI)
+   ========================================== */
+
+export async function generateMiniGameQuestions(techName: string) {
+  try {
+    // Intenta usar la API de Gemini si está configurada
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      
+      const prompt = `Actúa como un desarrollador senior experto en ${techName}.
+      Genera un mini-quiz de 3 preguntas de opción múltiple muy técnicas y desafiantes sobre ${techName}.
+      Devuelve SOLO un array JSON válido sin formato markdown ni texto adicional.
+      Estructura exacta: [{"question": "texto", "options": ["opción 1", "opción 2", "opción 3", "opción 4"], "correctIndex": número entero del 0 al 3}]`;
+
+      const result = await model.generateContent(prompt);
+      const text = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+      return JSON.parse(text);
+    }
+  } catch (error) {
+    console.error("Error generando preguntas con IA:", error);
+  }
+  
+  // Fallback a preguntas locales si falla o no hay API Key
+  return [
+    {
+      question: `¿Cuál es una práctica técnica recomendada al trabajar con ${techName}?`,
+      options: ["Evitar la modularidad", "Implementar lazy loading o code splitting", "No manejar los errores para ahorrar memoria", "Usar variables globales"],
+      correctIndex: 1
+    },
+    {
+      question: `Para depurar un problema de rendimiento complejo en ${techName}, la mejor herramienta suele ser:`,
+      options: ["Poner console.logs en cada línea", "Reescribir el archivo entero", "Utilizar el Profiler y las DevTools", "Ignorarlo si en local funciona"],
+      correctIndex: 2
+    }
+  ];
 }
