@@ -1,16 +1,34 @@
 'use client';
 import { auth } from '../../lib/firebase'; 
-import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, setPersistence, browserLocalPersistence, browserSessionPersistence, onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Comprobar si Firebase ya tiene una sesión recordada en este navegador
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        router.replace('/dashboard'); // Si hay sesión, redirigimos sin guardar historial
+      } else {
+        setIsCheckingAuth(false); // Si no hay sesión, mostramos el formulario
+      }
+    });
+    return () => unsub();
+  }, [router]);
 
   const handleGoogle = async () => {
     try {
+      const persistenceType = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+      await setPersistence(auth, persistenceType);
+
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       await signInWithPopup(auth, provider);
@@ -24,12 +42,27 @@ export default function LoginPage() {
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const persistenceType = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+      await setPersistence(auth, persistenceType);
+
       await signInWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
     } catch (e) { 
       alert("Credenciales incorrectas o usuario no registrado.");
     }
   };
+
+  // Pantalla de carga mientras Firebase verifica IndexedDB/SessionStorage
+  if (isCheckingAuth) {
+    return (
+      <main className="fixed inset-0 flex items-center justify-center bg-[#050505]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
+          <p className="text-blue-500 font-bold tracking-[0.2em] text-[10px] uppercase animate-pulse">Accediendo...</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="fixed inset-0 flex items-center justify-center bg-[#050505] p-4 overflow-hidden selection:bg-blue-500/30">
@@ -71,6 +104,24 @@ export default function LoginPage() {
               className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-white placeholder:text-slate-600 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm"
               required
             />
+            
+            <div className="flex items-center justify-between">
+              {/* Checkbox para "Recordarme" */}
+              <label className="flex items-center gap-2 text-white/70 cursor-pointer text-[11px] select-none uppercase tracking-wide">
+                <input 
+                  type="checkbox" 
+                  checked={rememberMe} 
+                  onChange={(e) => setRememberMe(e.target.checked)} 
+                  className="w-3.5 h-3.5 rounded border-white/10 bg-white/5 text-blue-500 focus:ring-blue-500 focus:ring-1 transition-all"
+                />
+                Recordarme
+              </label>
+
+              <Link href="/recuperar-contrasena" className="text-[10px] font-bold text-blue-500 hover:text-blue-400 transition-all uppercase tracking-wider">
+                ¿Olvidaste la contraseña?
+              </Link>
+            </div>
+
             <button className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black transition-all active:scale-95 shadow-lg shadow-blue-600/20 uppercase text-[11px] tracking-widest">
               Iniciar Sesión
             </button>
@@ -99,12 +150,16 @@ export default function LoginPage() {
             <span className="text-xs uppercase tracking-tight">Google</span>
           </button>
 
-          <footer className="mt-10 pt-8 border-t border-white/5">
-            <p className="text-[9px] text-slate-600 font-bold uppercase tracking-[0.2em]">
-              Sincronización en la nube activa
-            </p>
+          <footer className="mt-10 pt-8 border-t border-white/5 text-center">
+            <div className="flex flex-col items-center gap-4">
+              <Link href="/registro" className="text-[10px] font-bold text-slate-500 hover:text-white transition-all uppercase tracking-widest">
+                ¿No tienes cuenta? <span className="text-blue-500">Regístrate</span>
+              </Link>
+              <p className="text-[9px] text-slate-600 font-bold uppercase tracking-[0.2em]">
+                Sincronización en la nube activa
+              </p>
+            </div>
           </footer>
-
         </div>
       </div>
     </main>

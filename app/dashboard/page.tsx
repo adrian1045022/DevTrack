@@ -39,6 +39,8 @@ export default function DashboardPage() {
   const [score, setScore] = useState(0);
   const [showResult, setShowResult] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showGamificationModal, setShowGamificationModal] = useState(false);
+  const [gamiTab, setGamiTab] = useState('stats'); // stats, quests, rewards
   
   // ESTADO DEL PLAYGROUND (PROBAR CÓDIGO)
   const [isCoding, setIsCoding] = useState(false);
@@ -167,214 +169,62 @@ export default function DashboardPage() {
   const getCurriculum = (techName: string) => {
     const t = techName.toLowerCase();
 
-    // 1. DICCIONARIO BASE (JAVASCRIPT / TYPESCRIPT / DEFAULT)
-    let lg = {
-      name: techName,
-      p: "console.log",
-      vStr: "let nombre = \"Alex\";",
-      vInt: "let edad = 25;",
-      concat: "console.log(\"Hola \" + nombre);",
-      opers: "let r = 10 + 5;\nconsole.log(r > 10);",
-      cond: "if (edad >= 18) {\n   console.log(\"Mayor\");\n} else {\n   console.log(\"Menor\");\n}",
-      sw: "switch(dia) {\n  case 1: console.log(\"Lunes\"); break;\n  default: console.log(\"Otro\");\n}",
-      loop: "for (let i = 1; i <= 3; i++) {\n   console.log(i);\n}",
-      loopEach: "for (let color of colores) {\n   console.log(color);\n}",
-      func: "function saludar(nom) {\n   console.log(\"Hola \" + nom);\n}\nsaludar(\"Alex\");",
-      ret: "function sumar(a, b) {\n   return a + b;\n}\nlet total = sumar(5, 5);",
-      scope: "let global = 1;\nfunction test() {\n   let local = 2;\n}",
-      arr: "let juegos = [\"Zelda\", \"Mario\"];\nconsole.log(juegos[0]);",
-      dict: "let coche = { marca: \"Toyota\", color: \"Rojo\" };\nconsole.log(coche.marca);",
-      oop: "class Perro {\n  constructor(n) { this.n = n; }\n  ladrar() { console.log(\"Guau\"); }\n}",
-      inherit: "class Gato extends Animal {\n  maullar() { console.log(\"Miau\"); }\n}",
-      err: "try {\n  let x = 10 / 0;\n} catch(e) {\n  console.log(\"Error\");\n}",
-      async: "async function tarea() {\n  await esperar(2000);\n  console.log(\"Fin\");\n}"
-    };
-
-    // 2. DICCIONARIO PYTHON (Sintaxis dinámica e indentada sin llaves)
     if (t.includes('python')) {
-      lg = {
-        name: "Python",
-        p: "print",
-        vStr: "nombre = \"Alex\"",
-        vInt: "edad = 25",
-        concat: "print(\"Hola \" + nombre)",
-        opers: "r = 10 + 5\nprint(r > 10)",
-        cond: "if edad >= 18:\n   print(\"Mayor\")\nelse:\n   print(\"Menor\")",
-        sw: "match dia:\n  case 1: print(\"Lunes\")\n  case _: print(\"Otro\")",
-        loop: "for i in range(1, 4):\n   print(i)",
-        loopEach: "for color in colores:\n   print(color)",
-        func: "def saludar(nom):\n   print(\"Hola \" + nom)\n\nsaludar(\"Alex\")",
-        ret: "def sumar(a, b):\n   return a + b\n\ntotal = sumar(5, 5)",
-        scope: "global_var = 1\ndef test():\n   local_var = 2",
-        arr: "juegos = [\"Zelda\", \"Mario\"]\nprint(juegos[0])",
-        dict: "coche = { \"marca\": \"Toyota\", \"color\": \"Rojo\" }\nprint(coche[\"marca\"])",
-        oop: "class Perro:\n  def __init__(self, n):\n    self.n = n\n  def ladrar(self):\n    print(\"Guau\")",
-        inherit: "class Gato(Animal):\n  def maullar(self):\n    print(\"Miau\")",
-        err: "try:\n  x = 10 / 0\nexcept:\n  print(\"Error\")",
-        async: "import asyncio\nasync def tarea():\n  await asyncio.sleep(2)\n  print(\"Fin\")"
-      };
-    }
-    // 3. DICCIONARIO ESTRICTO (JAVA / C++ / C# con tipado fuerte y punto y coma)
-    else if (t.includes('java') || t.includes('c++') || t.includes('c#') || t.includes('cpp')) {
-      let isCpp = t.includes('c++') || t.includes('cpp');
-      let printCmd = "System.out.println(";
-      let printEnd = ");";
-      let langTitle = "Java";
-      
-      if (isCpp) {
-         printCmd = "cout << ";
-         printEnd = " << endl;";
-         langTitle = "C++";
-      } else if (t.includes('c#') || t.includes('csharp')) {
-         printCmd = "Console.WriteLine(";
-         langTitle = "C#";
-      }
-      
-      lg = {
-        name: langTitle,
-        p: isCpp ? "cout" : printCmd.replace('(', ''),
-        vStr: "String nombre = \"Alex\";",
-        vInt: "int edad = 25;",
-        concat: `${printCmd}"Hola " + nombre${printEnd}`,
-        opers: `int r = 10 + 5;\n${printCmd}r > 10${printEnd}`,
-        cond: `if (edad >= 18) {\n   ${printCmd}"Mayor"${printEnd}\n} else {\n   ${printCmd}"Menor"${printEnd}\n}`,
-        sw: `switch(dia) {\n  case 1: ${printCmd}"Lunes"${printEnd} break;\n  default: ${printCmd}"Otro"${printEnd}\n}`,
-        loop: `for (int i = 1; i <= 3; i++) {\n   ${printCmd}i${printEnd}\n}`,
-        loopEach: `for (String color : colores) {\n   ${printCmd}color${printEnd}\n}`,
-        func: `void saludar(String nom) {\n   ${printCmd}"Hola " + nom${printEnd}\n}\nsaludar("Alex");`,
-        ret: "int sumar(int a, int b) {\n   return a + b;\n}\nint total = sumar(5, 5);",
-        scope: "int global = 1;\nvoid test() {\n   int local = 2;\n}",
-        arr: `String[] juegos = {"Zelda", "Mario"};\n${printCmd}juegos[0]${printEnd}`,
-        dict: `Map<String, String> coche = new HashMap<>();\ncoche.put("marca", "Toyota");\n${printCmd}coche.get("marca")${printEnd}`,
-        oop: `class Perro {\n  String n;\n  public Perro(String n) { this.n = n; }\n  public void ladrar() { ${printCmd}"Guau"${printEnd} }\n}`,
-        inherit: `class Gato extends Animal {\n  public void maullar() { ${printCmd}"Miau"${printEnd} }\n}`,
-        err: `try {\n  int x = 10 / 0;\n} catch(Exception e) {\n  ${printCmd}"Error"${printEnd}\n}`,
-        async: `// En lenguajes compilados estrictos, la asincronía usa Threads o Tasks.\nThread t = new Thread(() -> { ${printCmd}"Fin"${printEnd} });\nt.start();`
-      };
+      return [
+        { id: 'vars', title: '1. Variables e Indentación', explanation: 'En Python no usamos llaves {} para los bloques de código, usamos espacios (indentación). Las variables no necesitan declarar su tipo.', example: 'nombre = "Alex"\nedad = 25\n\nif edad >= 18:\n    print(nombre + " es mayor")', exercise: 'Crea una variable "puntuacion" con valor 100. Usa un if para imprimir "Ganaste" si es mayor a 50.', solution: 'puntuacion = 100\nif puntuacion > 50:\n    print("Ganaste")' },
+        { id: 'lists', title: '2. Listas y Diccionarios', explanation: 'Python usa Listas (Arrays) y Diccionarios (Objetos clave-valor) de forma muy nativa y flexible.', example: 'juegos = ["Zelda", "Mario"]\njuegos.append("Halo")\n\nperfil = {"nombre": "Alex", "nivel": 10}\nprint(perfil["nivel"])', exercise: 'Crea un diccionario "usuario" con "alias" y "xp". Añade un juego nuevo a una lista de juegos.', solution: 'usuario = {"alias": "Dev", "xp": 50}\njuegos = ["Tetris"]\njuegos.append("Portal")\nprint(usuario, juegos)' },
+        { id: 'comp', title: '3. List Comprehensions', explanation: 'Una de las características más potentes de Python. Permite crear y filtrar listas en una sola línea de forma muy legible y rápida.', example: 'numeros = [1, 2, 3, 4, 5]\ncuadrados = [n * n for n in numeros]\npares = [n for n in numeros if n % 2 == 0]', exercise: 'Dada una lista de números del 1 al 5, crea una nueva lista solo con los impares usando comprehension.', solution: 'nums = [1, 2, 3, 4, 5]\nimpares = [n for n in nums if n % 2 != 0]\nprint(impares)' },
+        { id: 'funcs', title: '4. Funciones (*args, **kwargs)', explanation: 'Las funciones se definen con "def". Además de parámetros normales, Python permite recibir un número variable de argumentos usando *args o **kwargs.', example: 'def saludar(*nombres):\n    for n in nombres:\n        print("Hola", n)\n\nsaludar("Ana", "Juan", "Pedro")', exercise: 'Crea una función "sumar_todos" que reciba *args y devuelva la suma de todos los números que se le pasen.', solution: 'def sumar_todos(*args):\n    return sum(args)\nprint(sumar_todos(1, 2, 3, 4))' },
+        { id: 'oop', title: '5. POO y Clases', explanation: 'Python es multi-paradigma. En POO, usamos la palabra "class". Todos los métodos de instancia deben recibir "self" como primer parámetro.', example: 'class Perro:\n    def __init__(self, nombre):\n        self.nombre = nombre\n\n    def ladrar(self):\n        print(self.nombre + " dice Guau!")\n\np = Perro("Rex")\np.ladrar()', exercise: 'Crea una clase "Coche" con un constructor que reciba la marca. Añade un método "arrancar" que imprima "Brum brum".', solution: 'class Coche:\n    def __init__(self, marca):\n        self.marca = marca\n    def arrancar(self):\n        print("Brum brum")\nc = Coche("Ford")\nc.arrancar()' }
+      ];
     }
 
-    // CONSTRUCCIÓN DEL TEMARIO
+    if (t.includes('react') || t.includes('next')) {
+      return [
+        { id: 'jsx', title: '1. Introducción a JSX', explanation: 'React usa JSX, una sintaxis que permite escribir HTML dentro de JavaScript/TypeScript. En lugar de "class", usamos "className".', example: 'export default function App() {\n  const titulo = "React!";\n  return (\n    <div className="bg-dark">\n      <h1>Hola {titulo}</h1>\n    </div>\n  );\n}', exercise: 'Crea un componente "Boton" que devuelva un elemento <button> con el texto "Haz clic aquí" y un className "btn".', solution: 'export default function Boton() {\n  return <button className="btn">Haz clic aquí</button>;\n}' },
+        { id: 'state', title: '2. Estado (useState)', explanation: 'Para que la interfaz reaccione a cambios, usamos el Hook "useState". Esto nos da una variable y una función para actualizarla y repintar la pantalla.', example: 'import { useState } from "react";\n\nexport default function Contador() {\n  const [count, setCount] = useState(0);\n  return <button onClick={() => setCount(count + 1)}>Cliqued {count}</button>;\n}', exercise: 'Crea un componente con un estado "texto" inicializado vacío. Un botón que al hacer clic ponga "¡Actualizado!".', solution: 'import { useState } from "react";\nexport default function App() {\n  const [texto, setTexto] = useState("");\n  return <button onClick={() => setTexto("¡Actualizado!")}>{texto || "Haz clic"}</button>;\n}' },
+        { id: 'props', title: '3. Propiedades (Props)', explanation: 'Las "props" son como los parámetros de una función, pero para componentes. Permiten pasar datos de un componente padre a un componente hijo.', example: 'function Saludo({ nombre }) {\n  return <h2>Hola, {nombre}</h2>;\n}\n\nexport default function App() {\n  return <Saludo nombre="Alex" />;\n}', exercise: 'Crea un componente "Tarjeta" que reciba "titulo" y "descripcion" como props y las pinte dentro de un div.', solution: 'function Tarjeta({ titulo, descripcion }) {\n  return (\n    <div>\n      <h3>{titulo}</h3>\n      <p>{descripcion}</p>\n    </div>\n  );\n}\nexport default function App() {\n  return <Tarjeta titulo="T1" descripcion="Desc" />;\n}' },
+        { id: 'effect', title: '4. Efectos (useEffect)', explanation: 'El Hook "useEffect" permite ejecutar código "secundario", como pedir datos a una API, cuando el componente se carga o cuando un estado cambia.', example: 'import { useEffect, useState } from "react";\n\nexport default function App() {\n  useEffect(() => {\n    console.log("El componente se montó en pantalla");\n  }, []);\n  return <div>Hola</div>;\n}', exercise: 'Crea un componente que cambie el title del documento (document.title) a "Cargado" cuando el componente se monte.', solution: 'import { useEffect } from "react";\nexport default function App() {\n  useEffect(() => {\n    document.title = "Cargado";\n  }, []);\n  return <div>Hola</div>;\n}' }
+      ];
+    }
+
+    if (t.includes('javascript') || t.includes('typescript') || t.includes('node') || t.includes('express')) {
+      return [
+        { id: 'letconst', title: '1. Variables y Mutabilidad', explanation: 'En JS/TS moderno no usamos "var". Usamos "let" para variables que van a cambiar su valor y "const" para valores fijos que no serán reasignados.', example: 'const nombre = "Alex"; // Nunca cambiará\nlet edad = 25; // Puede cambiar\nedad = 26;\n// nombre = "Juan"; // Daría error', exercise: 'Crea una constante "URL" y una variable "intentos". Asigna 0 a "intentos" y luego actualízalo a 1.', solution: 'const URL = "https://api.com";\nlet intentos = 0;\nintentos = 1;' },
+        { id: 'arrow', title: '2. Funciones Flecha (Arrow)', explanation: 'Una sintaxis más corta para escribir funciones. Son muy usadas en callbacks y métodos de arrays porque no alteran el contexto de "this".', example: '// Función normal\nfunction sumar(a, b) { return a + b; }\n\n// Arrow Function\nconst sumarArrow = (a, b) => a + b;\nconst saludar = nombre => console.log("Hola", nombre);', exercise: 'Convierte una función normal "multiplicar(x, y)" que retorna el producto, en una Arrow Function de una sola línea.', solution: 'const multiplicar = (x, y) => x * y;' },
+        { id: 'arraymeth', title: '3. Array Methods (Map / Filter)', explanation: 'A diferencia de los bucles clásicos (for), JS tiene métodos funcionales increíbles para transformar listas de forma declarativa sin mutar el array original.', example: 'const nums = [1, 2, 3, 4];\n\n// Multiplicar todo por 2\nconst dobles = nums.map(n => n * 2);\n\n// Filtrar solo los pares\nconst pares = nums.filter(n => n % 2 === 0);', exercise: 'Dada una lista de palabras, usa .map() para transformarlas en mayúsculas (.toUpperCase()).', solution: 'const palabras = ["hola", "mundo"];\nconst mayus = palabras.map(p => p.toUpperCase());\nconsole.log(mayus);' },
+        { id: 'destruct', title: '4. Desestructuración de Objetos', explanation: 'Extrae valores de arreglos o propiedades de objetos y los asigna a variables en una sola línea de código muy limpia.', example: 'const user = { name: "Alex", role: "Admin" };\nconst { name, role } = user; // Extrae name y role\n\nconst rgb = [255, 0, 0];\nconst [r, g, b] = rgb;', exercise: 'Crea un objeto "juego" con titulo y precio. Extrae ambas propiedades en variables usando desestructuración.', solution: 'const juego = { titulo: "Zelda", precio: 60 };\nconst { titulo, precio } = juego;\nconsole.log(titulo, precio);' },
+        { id: 'async', title: '5. Promesas y Async / Await', explanation: 'JS no se bloquea al esperar tareas lentas. Usamos async/await para leer código asíncrono como si fuera secuencial.', example: 'async function obtenerDatos() {\n  console.log("Cargando...");\n  const res = await fetch("https://api.github.com/users/github");\n  const data = await res.json();\n  console.log(data.name);\n}', exercise: 'Crea una función async "tarea" que use await con "fetch" para pedir datos a "https://api.github.com" y devuelva el JSON.', solution: 'async function tarea() {\n  const res = await fetch("https://api.github.com");\n  const data = await res.json();\n  console.log(data);\n}' }
+      ];
+    }
+
+    if (t.includes('java') || t.includes('c#')) {
+      let print = t.includes('c#') ? 'Console.WriteLine' : 'System.out.println';
+      let title = t.includes('c#') ? 'C#' : 'Java';
+      return [
+        { id: 'types', title: '1. Tipado Fuerte y Clases Básicas', explanation: 'Estos lenguajes exigen que definas el TIPO exacto de cada variable. Además, todo el código DEBE vivir dentro de una Clase.', example: 'public class Main {\n  public static void main(String[] args) {\n    int edad = 25;\n    String nombre = "Alex";\n    ' + print + '("Hola " + nombre);\n  }\n}', exercise: 'Crea una variable entera (int) y un booleano (boolean/bool) dentro del método principal e imprímelos.', solution: 'int vidas = 3;\nboolean activo = true;\n' + print + '(vidas);\n' + print + '(activo);' },
+        { id: 'oop_constructors', title: '2. Clases y Constructores', explanation: 'Los objetos se instancian a partir de Clases. El Constructor es el método especial que se ejecuta automáticamente al usar "new".', example: 'class Perro {\n  String nombre;\n  \n  // Constructor\n  public Perro(String n) {\n    this.nombre = n;\n  }\n}\n// Uso:\nPerro miPerro = new Perro("Rex");', exercise: 'Crea una clase "Coche" con propiedad "marca" de tipo String y un constructor que asigne dicha marca.', solution: 'class Coche {\n  String marca;\n  public Coche(String m) {\n    this.marca = m;\n  }\n}' },
+        { id: 'collections', title: '3. Listas y Colecciones', explanation: 'En vez de arrays estáticos fijos, se suelen usar colecciones dinámicas fuertemente tipadas provenientes de la librería estándar.', example: '// C#: List<String> nombres = new List<String>();\n// Java: List<String> nombres = new ArrayList<>();\nnombres.add("Alex");\n' + print + '(nombres.get(0)); // En C# usarías nombres[0]', exercise: 'Crea una lista genérica para guardar números, añadele el número 10 y luego imprímelo.', solution: '// En Java:\nList<Integer> nums = new ArrayList<>();\nnums.add(10);\n' + print + '(nums.get(0));' },
+        { id: 'exceptions', title: '4. Control de Excepciones', explanation: 'Los errores en ejecución ("Runtime") se capturan con bloques Try/Catch para evitar que la aplicación colapse completamente y poder gestionarlos con gracia.', example: 'try {\n  int calculo = 10 / 0;\n} catch (Exception e) {\n  ' + print + '("Hubo un error matemático");\n}', exercise: 'Protege un código que intenta acceder al índice 5 de un array que solo tiene 2 posiciones. En el catch imprime un mensaje.', solution: 'try {\n  int[] arr = {1, 2};\n  int x = arr[5];\n} catch (Exception e) {\n  ' + print + '("Fuera de índice");\n}' }
+      ];
+    }
+
+    if (t.includes('c++') || t.includes('cpp')) {
+      return [
+        { id: 'headers', title: '1. Includes y main()', explanation: 'En C++ debemos incluir las librerías necesarias con #include (como iostream). El punto de entrada del programa siempre es la función int main().', example: '#include <iostream>\nusing namespace std;\n\nint main() {\n  cout << "Hola Mundo" << endl;\n  return 0;\n}', exercise: 'Escribe la estructura básica de un archivo C++ que devuelva 0 y que imprima tu nombre por consola.', solution: '#include <iostream>\nusing namespace std;\nint main() {\n  cout << "TuNombre" << endl;\n  return 0;\n}' },
+        { id: 'pointers', title: '2. Punteros y Memoria Manual', explanation: 'C++ te da control total y directo de la memoria. Un puntero (*) es una variable especial que no guarda un valor común, sino la DIRECCIÓN de memoria de otra variable.', example: 'int vida = 100;\nint* ptrVida = &vida; // "&" obtiene la dirección de "vida"\n\ncout << "Valor: " << *ptrVida << endl;\ncout << "Dirección: " << ptrVida << endl;', exercise: 'Declara una variable int "puntos". Crea un puntero que apunte a ella e imprime su valor usando solo el puntero.', solution: 'int puntos = 50;\nint* ptr = &puntos;\ncout << *ptr << endl;' },
+        { id: 'vectors', title: '3. Librería de Plantillas Estándar (std::vector)', explanation: 'Aunque C++ tiene arrays crudos heredados de C, en el desarrollo C++ moderno se utilizan Vectores, que son arrays dinámicos y automáticos de la STL.', example: '#include <vector>\n// ...\nvector<int> nums;\nnums.push_back(10);\nnums.push_back(20);\ncout << nums.size() << endl;', exercise: 'Crea un vector de enteros, añade tres números mediante push_back y usa un bucle for tradicional para iterar sobre ellos.', solution: 'vector<int> v;\nv.push_back(1);\nv.push_back(2);\nfor(int i=0; i<v.size(); i++) {\n  cout << v[i] << endl;\n}' },
+        { id: 'oop_cpp', title: '4. POO y Modificadores de Acceso', explanation: 'En C++ definimos clases con especificadores de acceso explícitos (public, private) aplicados a bloques enteros de atributos y métodos.', example: 'class Enemigo {\nprivate:\n  int hp;\npublic:\n  Enemigo(int vida) { hp = vida; }\n  void recibirDano() { hp -= 10; }\n};\n\nint main() {\n  Enemigo orco(100);\n}', exercise: 'Crea una clase Jugador con una variable privada "mana" y un constructor público que asigne esa variable.', solution: 'class Jugador {\nprivate:\n  int mana;\npublic:\n  Jugador(int m) {\n    mana = m;\n  }\n};' }
+      ];
+    }
+
+    // FALLBACK GENÉRICO PARA OTROS LENGUAJES / TECNOLOGÍAS
     return [
-      { 
-        id: 'vars', 
-        title: '1. Variables y Tipos', 
-        explanation: `En ${lg.name}, las variables son cajas donde guardamos información en memoria.\n\nTipos básicos:\n• String: Para textos.\n• Integer: Para números.\n• Boolean: Verdadero o Falso.`, 
-        example: `${lg.vStr}\n${lg.vInt}\n\n${lg.concat}`,
-        exercise: `1. Declara una variable de texto con tu nombre.\n2. Declara una numérica con tu edad.\n3. Imprime por consola un saludo usando esas variables.`,
-        solution: `// Solución esperada:\n${lg.vStr.replace('Alex', 'TuNombre')}\n${lg.vInt.replace('25', '99')}\n${lg.concat}`
-      },
-      { 
-        id: 'opers', 
-        title: '2. Operadores Básicos', 
-        explanation: `Los operadores te permiten calcular y comparar datos en ${lg.name}.\n\n• Matemáticos: +, -, *, /, %\n• Comparación: ==, !=, >, <`, 
-        example: `${lg.opers}`,
-        exercise: `1. Crea dos variables numéricas con valores distintos.\n2. Calcula e imprime la suma de ambas.\n3. Imprime si la primera es mayor que la segunda.`,
-        solution: `// Solución:\n${lg.opers}`
-      },
-      { 
-        id: 'cond', 
-        title: '3. Condicionales (If/Else)', 
-        explanation: `Las condicionales son "bifurcaciones" lógicas. Tu programa tomará decisiones en base a ciertas reglas que definas.`, 
-        example: `${lg.vInt}\n\n${lg.cond}`,
-        exercise: `1. Crea una variable 'nota' y asígnale un valor del 1 al 10.\n2. Escribe una condicional if/else.\n3. Si la nota es 5 o mayor, imprime "¡Aprobado!". Si es menor, imprime "Suspenso".`,
-        solution: `// Solución:\n${lg.cond.replace('18', '5').replace('Mayor', '¡Aprobado!').replace('Menor', 'Suspenso')}`
-      },
-      { 
-        id: 'switch', 
-        title: '4. Múltiples Casos (Switch / Case)', 
-        explanation: `Cuando tienes muchas opciones condicionales para una misma variable, usar estructuras de Múltiples Casos es más limpio.`, 
-        example: `${lg.sw}`,
-        exercise: `1. Crea una variable 'opcion' con valor 1, 2 o 3.\n2. Haz una estructura de casos que imprima un mensaje distinto según el número.`,
-        solution: `// Solución:\n${lg.sw.replace('dia', 'opcion')}`
-      },
-      { 
-        id: 'loops', 
-        title: '5. Bucles (For / While)', 
-        explanation: `Un bucle repite un bloque de código automáticamente.\n\n• FOR: Cuando sabes cuántas veces exactas quieres repetir.`, 
-        example: `// Bucle FOR\n${lg.loop}`,
-        exercise: `1. Escribe un bucle FOR que cuente desde el 1 hasta el 10.\n2. Dentro del bucle, imprime el número en cada paso.`,
-        solution: `// Solución:\n${lg.loop.replace('3', '10')}`
-      },
-      { 
-        id: 'foreach', 
-        title: '6. Bucles de Colecciones (Foreach)', 
-        explanation: `Es un tipo especial de bucle diseñado específicamente para iterar (recorrer) todos los elementos de una colección o lista uno a uno.`, 
-        example: `${lg.loopEach}`,
-        exercise: `1. Crea una lista de tres colores.\n2. Usa un bucle para imprimir cada color por pantalla.`,
-        solution: `// Solución:\n${lg.loopEach}`
-      },
-      { 
-        id: 'funcs', 
-        title: '7. Funciones y Parámetros', 
-        explanation: `Las funciones son bloques de código reutilizables. Evitan que repitas código, recibiendo "parámetros" (datos de entrada) con los que ejecutar su lógica.`, 
-        example: `${lg.func}`,
-        exercise: `1. Declara una función 'despedir' que reciba un 'nombre' por parámetro.\n2. Haz que imprima por consola "Adiós " + nombre.\n3. Llámala pasándole un nombre.`,
-        solution: `// Solución:\n${lg.func.replace(/saludar/g, 'despedir').replace('Hola ', 'Adiós ')}`
-      },
-      { 
-        id: 'return', 
-        title: '8. Funciones (Retorno / Return)', 
-        explanation: `Las funciones no solo sirven para imprimir, sino que pueden "devolver" (Return) un valor procesado de vuelta a la variable que las llamó.`, 
-        example: `${lg.ret}`,
-        exercise: `1. Crea una función 'multiplicar' que reciba dos números por parámetro.\n2. Usa 'return' para devolver su producto.\n3. Guarda su ejecución en una variable.`,
-        solution: `// Solución:\n${lg.ret.replace(/sumar/g, 'multiplicar').replace('a + b', 'a * b')}`
-      },
-      { 
-        id: 'scope', 
-        title: '9. Ámbito de las Variables (Scope)', 
-        explanation: `El Ámbito o Scope define dónde "existe" una variable. Si creas una variable dentro de una función, se destruye al terminar y no puedes usarla fuera.`, 
-        example: `${lg.scope}`,
-        exercise: `1. Declara una variable global.\n2. Declara una función que cree una variable local y la imprima.\n3. Intenta imprimir la variable local fuera de la función.`,
-        solution: `// Solución (Dará error intencional):\n${lg.scope}\n// ERROR si llamas a la local fuera.`
-      },
-      { 
-        id: 'arrays', 
-        title: '10. Colecciones (Arrays / Listas)', 
-        explanation: `Las listas te permiten agrupar múltiples valores. Recuerda siempre que en programación, el primer elemento se guarda en la posición [0].`, 
-        example: `${lg.arr}`,
-        exercise: `1. Crea una lista/array con 3 lenguajes de programación.\n2. Imprime en consola únicamente el SEGUNDO elemento.`,
-        solution: `// Solución:\n${lg.arr.replace('"Zelda", "Mario"', '"Java", "Python", "C++"').replace('[0]', '[1]')}`
-      },
-      { 
-        id: 'dicts', 
-        title: '11. Diccionarios / Objetos', 
-        explanation: `A diferencia de las listas que se ordenan por números (0, 1, 2...), los diccionarios y objetos se organizan mediante nombres legibles llamados "Claves" y "Valores".`, 
-        example: `${lg.dict}`,
-        exercise: `1. Escribe una estructura tipo Diccionario/Objeto que represente a un Libro.\n2. Añade las claves: "titulo" y "autor".\n3. Imprime por consola solo el título.`,
-        solution: `// Solución:\n${lg.dict.replace('coche', 'libro').replace('marca', 'titulo')}`
-      },
-      { 
-        id: 'oop', 
-        title: '12. Clases y Objetos (POO)', 
-        explanation: `La Programación Orientada a Objetos modela tu código basándose en el mundo real. Las Clases son los "moldes" genéricos y los Objetos son el resultado creado.`, 
-        example: `${lg.oop}`,
-        exercise: `1. Crea una clase 'Rectangulo' que reciba ancho y alto.\n2. Añade un método dentro llamado 'calcularArea()'.\n3. Crea un rectángulo y llama a la función.`,
-        solution: `// Solución:\n${lg.oop.replace('Perro', 'Rectangulo')}`
-      },
-      { 
-        id: 'inheritance', 
-        title: '13. Herencia y Polimorfismo (POO)', 
-        explanation: `Una clase puede "heredar" las propiedades y métodos de otra clase superior. Esto permite crear jerarquías lógicas y evitar reescribir código.`, 
-        example: `${lg.inherit}`,
-        exercise: `1. Crea una clase padre 'Vehiculo'.\n2. Crea una clase hija 'Moto' que herede de Vehiculo.\n3. Añade un método exclusivo a Moto y úsalo.`,
-        solution: `// Solución:\n${lg.inherit.replace('Gato', 'Moto').replace('Animal', 'Vehiculo')}`
-      },
-      { 
-        id: 'errors', 
-        title: '14. Manejo de Errores (Try/Catch)', 
-        explanation: `Para evitar que un programa falle de golpe y se cierre en seco, usamos \`try/catch\` para encapsular código peligroso y atrapar excepciones de forma segura.`, 
-        example: `${lg.err}`,
-        exercise: `1. Crea un bloque Try/Catch en ${lg.name}.\n2. En el Try, provoca un fallo intencional.\n3. En el Catch, imprime que has capturado el error.`,
-        solution: `// Solución:\n${lg.err}`
-      },
-      { 
-        id: 'async', 
-        title: '15. Asincronía Básica (Async)', 
-        explanation: `A veces el código tarda en ejecutarse (ej: descargar datos de internet). El código asíncrono permite que el programa espere sin congelar tu pantalla.`, 
-        example: `${lg.async}`,
-        exercise: `1. Investiga cómo hacer un 'Sleep', 'Delay' o 'Timeout' en ${lg.name}.\n2. Imprime un texto, pausa la ejecución, y luego imprime "¡Fin!".`,
-        solution: `// Solución:\n${lg.async}`
-      }
+      { id: 'vars', title: '1. Variables y Fundamentos', explanation: `Aprender ${techName} comienza por entender cómo se guardan los datos. Todo lenguaje tiene variables (cajas de datos en memoria) y tipos básicos (Textos, Números, Booleanos).`, example: '// Ejemplo genérico\nnombre = "Alex"\nedad = 25', exercise: 'Crea dos variables: una de texto y otra numérica, y busca cómo imprimirlas en consola.', solution: '// La solución dependerá del lenguaje específico que estés probando\nnombre = "Test";\nvalor = 1;\nprint/console.log(nombre, valor);' },
+      { id: 'conds', title: '2. Condicionales y Lógica de Flujo', explanation: 'Los programas toman decisiones evaluando condiciones booleanas. Si ocurre un evento o se cumple una regla, ejecuta algo, si no, ejecuta otra cosa.', example: 'if (edad >= 18) {\n  mostrar("Permitido");\n} else {\n  mostrar("Denegado");\n}', exercise: 'Escribe un bloque condicional que evalúe si un número es mayor a 10.', solution: 'if (num > 10) { print("Mayor"); } else { print("Menor"); }' },
+      { id: 'loops', title: '3. Repetición Estructurada (Bucles)', explanation: 'Para no tener que repetir el mismo código mil veces a mano, usamos bucles (For, While, Do-While) que iteran sobre colecciones o ejecutan instrucciones N veces.', example: 'for i = 1 to 5 {\n  imprimir(i)\n}', exercise: 'Crea un bucle que se repita 3 veces imprimiendo un mensaje en consola.', solution: 'for (i=0; i<3; i++) { print("Hola"); }' },
+      { id: 'funcs', title: '4. Modularidad y Funciones', explanation: 'Cuando el código crece demasiado, lo dividimos y empaquetamos en funciones reutilizables que pueden recibir parámetros y retornar nuevos valores procesados.', example: 'funcion sumar(a, b) {\n  return a + b;\n}\ntotal = sumar(5, 5);', exercise: 'Crea una función llamada "multiplicar" que reciba dos parámetros y retorne su producto.', solution: 'function multiplicar(a, b) { return a * b; }' },
+      { id: 'data', title: '5. Estructuras de Datos Complejas', explanation: 'Para escenarios avanzados, agrupamos datos simples en estructuras más complejas como Listas, Arrays, Matrices, Diccionarios u Objetos.', example: 'lista = [1, 2, 3]\ndiccionario = { "clave": "valor" }', exercise: 'Crea una estructura de datos que contenga una lista o arreglo de tus colores favoritos.', solution: 'colores = ["rojo", "azul", "verde"];' }
     ];
   };
 
@@ -403,24 +253,74 @@ export default function DashboardPage() {
     else setShowResult(true);
   };
 
-  // CÁLCULO DE GAMIFICACIÓN (XP Y NIVELES)
-  const { xp, level, nextLvlBaseXp, progress } = useMemo(() => {
+  // CÁLCULO DE GAMIFICACIÓN MEJORADO (XP, NIVELES, RANGOS Y LOGROS)
+  const gamification = useMemo(() => {
     let xp = 0;
+    let stats = { learning: 0, practicing: 0, mastered: 0, notes: 0, resources: 0, maxStreak: 0 };
+    
     techs.forEach(t => {
-      if (t.status === 'Dominado') xp += 500;
-      else if (t.status === 'Practicando') xp += 200;
-      else xp += 50; // Aprendiendo
+      if (t.status === 'Dominado') { xp += 1000; stats.mastered++; }
+      else if (t.status === 'Practicando') { xp += 300; stats.practicing++; }
+      else { xp += 100; stats.learning++; }
 
-      xp += (t.notes?.length || 0) * 50;
-      xp += (t.resources?.length || 0) * 20;
-      xp += (t.streak || 0) * 10;
+      const notesCount = t.notes?.length || 0;
+      const resCount = t.resources?.length || 0;
+      const currentStreak = t.streak || 0;
+
+      xp += notesCount * 150;
+      xp += resCount * 50;
+      xp += currentStreak * 50;
+
+      stats.notes += notesCount;
+      stats.resources += resCount;
+      if (currentStreak > stats.maxStreak) stats.maxStreak = currentStreak;
     });
 
     const level = Math.floor(Math.sqrt(Math.max(xp, 0) / 100)) + 1;
     const currentLvlBaseXp = Math.pow(level - 1, 2) * 100;
     const nextLvlBaseXp = Math.pow(level, 2) * 100;
     const progress = ((xp - currentLvlBaseXp) / (nextLvlBaseXp - currentLvlBaseXp)) * 100;
-    return { xp, level, nextLvlBaseXp, progress };
+
+    // Determinar Rango
+    let rank = { name: "Hierro", color: "text-slate-400", bg: "bg-slate-400", border: "border-slate-400/20" };
+    if (level >= 5 && level < 10) rank = { name: "Bronce", color: "text-orange-400", bg: "bg-orange-400", border: "border-orange-400/20" };
+    else if (level >= 10 && level < 15) rank = { name: "Plata", color: "text-gray-300", bg: "bg-gray-300", border: "border-gray-300/20" };
+    else if (level >= 15 && level < 20) rank = { name: "Oro", color: "text-yellow-400", bg: "bg-yellow-400", border: "border-yellow-400/20" };
+    else if (level >= 20 && level < 30) rank = { name: "Platino", color: "text-cyan-400", bg: "bg-cyan-400", border: "border-cyan-400/20" };
+    else if (level >= 30 && level < 50) rank = { name: "Diamante", color: "text-indigo-400", bg: "bg-indigo-400", border: "border-indigo-400/20" };
+    else if (level >= 50) rank = { name: "Leyenda", color: "text-fuchsia-500", bg: "bg-fuchsia-500", border: "border-fuchsia-500/20" };
+
+    // Evaluar Logros
+    
+    // Daily Quests (Misiones Diarias Generadas Dinámicamente)
+    const today = new Date().toLocaleDateString();
+    // Deterministic random based on today's date and user email length to keep quests consistent for the day
+    const seed = today.split('/').join('') + techs.length;
+    
+    const quests = [
+      { id: 1, title: 'El Coleccionista', desc: 'Guarda al menos 3 recursos en total.', target: 3, current: stats.resources, xp: 150, icon: '💾' },
+      { id: 2, title: 'Erudito Constante', desc: 'Alcanza una racha de fuego de 3 días.', target: 3, current: stats.maxStreak, xp: 300, icon: '🔥' },
+      { id: 3, title: 'Maestro del Código', desc: 'Domina al menos 1 tecnología.', target: 1, current: stats.mastered, xp: 500, icon: '🏆' },
+      { id: 4, title: 'Lector Empedernido', desc: 'Escribe 5 apuntes en total.', target: 5, current: stats.notes, xp: 200, icon: '📝' }
+    ].sort((a, b) => (a.id * Number(seed)) % 5 - (b.id * Number(seed)) % 5).slice(0, 3); // Pick 3 daily
+
+    // Rewards (Unlockables)
+    const rewards = [
+      { level: 5, name: 'Borde de Bronce', type: 'Marco', icon: '🥉' },
+      { level: 10, name: 'Título: El Coder', type: 'Título', icon: '🏷️' },
+      { level: 15, name: 'Tema Oscuro Profundo', type: 'Tema', icon: '🌙' },
+      { level: 20, name: 'Borde de Platino', type: 'Marco', icon: '💎' },
+      { level: 30, name: 'Modo Dios', type: 'Especial', icon: '⚡' }
+    ];
+
+    const badges = [];
+    if (techs.length > 0) badges.push({ icon: "🌱", name: "Primeros Pasos", desc: "Añadiste tu primera tecnología." });
+    if (stats.notes >= 5) badges.push({ icon: "📚", name: "Erudito", desc: "Has creado 5 o más apuntes." });
+    if (stats.mastered >= 1) badges.push({ icon: "🏆", name: "Maestro", desc: "Has dominado al menos 1 tecnología." });
+    if (stats.maxStreak >= 5) badges.push({ icon: "🔥", name: "Imparable", desc: "Racha de 5 días o más." });
+    if (stats.resources >= 10) badges.push({ icon: "💾", name: "Librería Viva", desc: "Guardaste 10 o más recursos." });
+
+    return { xp, level, nextLvlBaseXp, progress, rank, stats, badges, quests, rewards };
   }, [techs]);
 
   const handleAddTech = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -476,16 +376,22 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-6">
-          {/* SISTEMA DE NIVELES */}
-          <div className="hidden lg:flex items-center gap-4 bg-black/20 px-5 py-2.5 rounded-2xl border border-white/5 shadow-inner" title="Sube de nivel agregando notas, recursos y dominando tecnologías">
+          {/* SISTEMA DE NIVELES (AHORA CLICABLE) */}
+          <button 
+            onClick={() => setShowGamificationModal(true)}
+            className={`hidden lg:flex items-center gap-4 bg-black/20 px-5 py-2.5 rounded-2xl border hover:border-white/20 transition-all shadow-inner cursor-pointer ${gamification.rank.border}`}
+            title="Ver tu Perfil de Desarrollador"
+          >
             <div className="text-right">
-              <span className="text-[10px] text-indigo-400 font-black uppercase tracking-widest block italic">Lvl {level}</span>
-              <span className="text-[9px] text-white/40 font-black uppercase tracking-widest">{xp} / {nextLvlBaseXp} XP</span>
+              <span className={`text-[10px] ${gamification.rank.color} font-black uppercase tracking-widest block italic`}>
+                Lvl {gamification.level} • {gamification.rank.name}
+              </span>
+              <span className="text-[9px] text-white/40 font-black uppercase tracking-widest">{gamification.xp} / {gamification.nextLvlBaseXp} XP</span>
             </div>
-            <div className="w-20 h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/5">
-              <div className="h-full bg-indigo-500 shadow-[0_0_10px_#6366f1] transition-all duration-1000" style={{ width: `${progress}%` }}></div>
+            <div className="w-20 h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/5 relative">
+              <div className={`h-full ${gamification.rank.bg} shadow-[0_0_10px_currentColor] transition-all duration-1000`} style={{ width: `${gamification.progress}%` }}></div>
             </div>
-          </div>
+          </button>
 
           <Link href="/community" className="text-[10px] font-black text-white/30 hover:text-indigo-400 transition-all uppercase tracking-[0.3em] border border-white/5 px-6 py-2.5 rounded-xl bg-white/5">Comunidad</Link>
           <button onClick={() => signOut(auth)} className="bg-white/5 hover:bg-red-500/20 hover:text-red-400 text-[10px] font-black px-6 py-2.5 rounded-xl transition-all border border-white/5 uppercase text-white/40">Salir</button>
@@ -810,6 +716,193 @@ export default function DashboardPage() {
             <h3 className="text-4xl font-black mb-12 uppercase italic text-indigo-400 border-b border-white/5 pb-10 leading-none tracking-tighter text-left">{viewingNote.title}</h3>
             <div className="flex-1 overflow-y-auto pr-8 scrollbar-hide text-left">
               <NoteRenderer content={viewingNote.content} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PERFIL GAMIFICACIÓN (GAMIFICATION HUB 2.0) */}
+      {showGamificationModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 lg:p-8 bg-[#0f1115]/95 backdrop-blur-sm" onClick={() => setShowGamificationModal(false)}>
+          <div className="relative w-full max-w-5xl h-[85vh] bg-[#1e2227] overflow-hidden rounded-[3rem] border border-white/10 flex flex-col shadow-2xl animate-in zoom-in duration-300" onClick={e => e.stopPropagation()}>
+            
+            {/* HEADER DEL PERFIL */}
+            <div className="p-8 lg:p-10 border-b border-white/5 relative overflow-hidden flex items-center justify-between shrink-0">
+              <div className={`absolute inset-0 opacity-10 bg-gradient-to-r from-transparent via-current to-transparent ${gamification.rank.color}`}></div>
+              <div className="relative z-10 flex items-center gap-8">
+                <div className="relative">
+                  <div className={`w-24 h-24 rounded-3xl flex items-center justify-center text-5xl shadow-lg border ${gamification.rank.bg} ${gamification.rank.border} shadow-current/20`}>
+                    {gamification.rank.name.charAt(0)}
+                  </div>
+                  <div className="absolute -bottom-3 -right-3 bg-[#1e2227] border border-white/10 text-white font-black text-xs px-3 py-1 rounded-full shadow-lg">
+                    Lvl {gamification.level}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[12px] font-black text-white/50 tracking-[0.4em] uppercase mb-1 italic">DevTrack Profile</p>
+                  <h2 className={`text-5xl font-black italic uppercase tracking-tighter ${gamification.rank.color}`}>{user?.email?.split('@')[0] || 'Developer'}</h2>
+                  <p className={`text-sm font-bold uppercase tracking-widest mt-2 ${gamification.rank.color} opacity-80`}>Rango: {gamification.rank.name}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowGamificationModal(false)} className="relative z-10 w-14 h-14 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all text-2xl font-light text-white/50 hover:text-white">✕</button>
+            </div>
+
+            {/* NAVEGACIÓN DE TABS */}
+            <div className="flex px-10 border-b border-white/5 shrink-0 bg-[#16191d]">
+               {['stats', 'quests', 'rewards'].map((tab) => (
+                 <button 
+                   key={tab}
+                   onClick={() => setGamiTab(tab)}
+                   className={`px-8 py-5 text-[11px] font-black uppercase tracking-[0.2em] transition-all ${gamiTab === tab ? 'text-indigo-400 border-b-2 border-indigo-400 bg-white/5' : 'text-white/30 hover:text-white/60 hover:bg-white/[0.02]'}`}
+                 >
+                   {tab === 'stats' ? '📊 Estadísticas' : tab === 'quests' ? '🎯 Misiones' : '🎁 Recompensas'}
+                 </button>
+               ))}
+            </div>
+            
+            {/* CONTENIDO DESLIZABLE */}
+            <div className="p-10 lg:p-12 flex-1 overflow-y-auto scrollbar-hide">
+              
+              {/* TAB: ESTADÍSTICAS */}
+              {gamiTab === 'stats' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 animate-in fade-in slide-in-from-bottom-4">
+                  <div className="space-y-4">
+                    <h3 className="text-[11px] font-black text-white/40 uppercase tracking-[0.3em] mb-6 border-b border-white/5 pb-4 italic">Estadísticas de Combate</h3>
+                    <div className="flex justify-between items-center bg-black/20 p-5 rounded-2xl border border-white/5 hover:border-indigo-500/20 transition-all">
+                      <span className="text-xs font-bold text-white/70 uppercase">Tecnologías Dominadas</span>
+                      <span className="text-lg font-black text-emerald-400">{gamification.stats.mastered} <span className="text-[10px] text-emerald-400/50 ml-2">({gamification.stats.mastered * 1000} XP)</span></span>
+                    </div>
+                    <div className="flex justify-between items-center bg-black/20 p-5 rounded-2xl border border-white/5 hover:border-indigo-500/20 transition-all">
+                      <span className="text-xs font-bold text-white/70 uppercase">En Práctica</span>
+                      <span className="text-lg font-black text-amber-400">{gamification.stats.practicing} <span className="text-[10px] text-amber-400/50 ml-2">({gamification.stats.practicing * 300} XP)</span></span>
+                    </div>
+                    <div className="flex justify-between items-center bg-black/20 p-5 rounded-2xl border border-white/5 hover:border-indigo-500/20 transition-all">
+                      <span className="text-xs font-bold text-white/70 uppercase">Aprendiendo</span>
+                      <span className="text-lg font-black text-indigo-400">{gamification.stats.learning} <span className="text-[10px] text-indigo-400/50 ml-2">({gamification.stats.learning * 100} XP)</span></span>
+                    </div>
+                    <div className="flex justify-between items-center bg-black/20 p-5 rounded-2xl border border-white/5 hover:border-indigo-500/20 transition-all">
+                      <span className="text-xs font-bold text-white/70 uppercase">Apuntes Creados</span>
+                      <span className="text-lg font-black text-blue-400">{gamification.stats.notes} <span className="text-[10px] text-blue-400/50 ml-2">({gamification.stats.notes * 150} XP)</span></span>
+                    </div>
+                    <div className="flex justify-between items-center bg-black/20 p-5 rounded-2xl border border-white/5 hover:border-orange-500/20 transition-all">
+                      <span className="text-xs font-bold text-white/70 uppercase">Racha Máxima (Días)</span>
+                      <span className="text-lg font-black text-orange-400">{gamification.stats.maxStreak} <span className="text-[10px] text-orange-400/50 ml-2">({gamification.stats.maxStreak * 50} XP)</span></span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-[11px] font-black text-white/40 uppercase tracking-[0.3em] mb-6 border-b border-white/5 pb-4 italic">Logros Desbloqueados</h3>
+                    {gamification.badges.length === 0 ? (
+                      <div className="bg-black/20 p-12 rounded-3xl border border-white/5 text-center flex flex-col items-center justify-center h-64">
+                        <span className="text-5xl block mb-4 opacity-20">🏆</span>
+                        <p className="text-xs text-white/40 uppercase tracking-widest font-bold">Aún no tienes logros.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-4">
+                        {gamification.badges.map((badge, i) => (
+                          <div key={i} className="flex items-center gap-5 bg-black/20 p-4 rounded-2xl border border-white/5 hover:border-indigo-500/50 transition-all group">
+                            <div className="w-14 h-14 bg-[#282c34] rounded-xl border border-white/10 flex items-center justify-center text-3xl shadow-inner group-hover:scale-110 transition-transform">
+                              {badge.icon}
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-black text-white/90 uppercase tracking-wider group-hover:text-indigo-300 transition-colors">{badge.name}</h4>
+                              <p className="text-[11px] text-white/40 uppercase mt-1 leading-tight">{badge.desc}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: MISIONES DIARIAS */}
+              {gamiTab === 'quests' && (
+                <div className="animate-in fade-in slide-in-from-bottom-4 max-w-4xl mx-auto">
+                  <div className="bg-indigo-500/10 border border-indigo-500/20 p-6 rounded-3xl mb-10 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-black text-indigo-400 uppercase tracking-widest italic mb-2">Tablón de Misiones</h3>
+                      <p className="text-xs text-indigo-200/60 font-bold uppercase tracking-wider">Completa estos objetivos para ganar XP extra. Se renuevan diariamente.</p>
+                    </div>
+                    <div className="text-4xl">🎯</div>
+                  </div>
+
+                  <div className="space-y-6">
+                    {gamification.quests.map((q) => {
+                      const isCompleted = q.current >= q.target;
+                      const progressPercent = Math.min((q.current / q.target) * 100, 100);
+                      
+                      return (
+                        <div key={q.id} className={`p-6 rounded-3xl border transition-all flex items-center gap-8 ${isCompleted ? 'bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-black/20 border-white/5 hover:border-indigo-500/30'}`}>
+                          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shrink-0 ${isCompleted ? 'bg-emerald-500/20 text-emerald-400' : 'bg-[#282c34] text-white/50'}`}>
+                            {isCompleted ? '✓' : q.icon}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className={`text-lg font-black uppercase tracking-wider ${isCompleted ? 'text-emerald-400' : 'text-white'}`}>{q.title}</h4>
+                              <span className="text-[10px] font-black px-3 py-1 rounded-full bg-white/5 text-indigo-300 uppercase tracking-widest border border-white/10">+{q.xp} XP</span>
+                            </div>
+                            <p className="text-xs text-white/40 uppercase font-bold tracking-widest mb-4">{q.desc}</p>
+                            
+                            <div className="flex items-center gap-4">
+                              <div className="flex-1 bg-black/50 h-2 rounded-full overflow-hidden border border-white/5">
+                                <div className={`h-full transition-all duration-1000 ${isCompleted ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${progressPercent}%` }}></div>
+                              </div>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-white/50 w-12 text-right">
+                                {Math.min(q.current, q.target)} / {q.target}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: RECOMPENSAS */}
+              {gamiTab === 'rewards' && (
+                <div className="animate-in fade-in slide-in-from-bottom-4 max-w-4xl mx-auto">
+                  <div className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-3xl mb-10 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-black text-amber-400 uppercase tracking-widest italic mb-2">Progreso y Recompensas</h3>
+                      <p className="text-xs text-amber-200/60 font-bold uppercase tracking-wider">Desbloquea contenido cosmético al subir de nivel.</p>
+                    </div>
+                    <div className="text-4xl">🎁</div>
+                  </div>
+
+                  <div className="relative border-l-2 border-white/10 ml-8 space-y-12 pb-12">
+                    {gamification.rewards.map((r) => {
+                      const isUnlocked = gamification.level >= r.level;
+                      
+                      return (
+                        <div key={r.level} className="relative pl-12 flex items-center gap-8">
+                          {/* Nodo del Timeline */}
+                          <div className={`absolute -left-[25px] w-12 h-12 rounded-full border-4 flex items-center justify-center text-sm font-black transition-all ${isUnlocked ? 'bg-amber-500 border-[#1e2227] text-[#1e2227] shadow-[0_0_20px_rgba(245,158,11,0.5)]' : 'bg-[#282c34] border-[#1e2227] text-white/30'}`}>
+                            {r.level}
+                          </div>
+
+                          <div className={`flex-1 p-6 rounded-3xl border flex items-center gap-6 transition-all ${isUnlocked ? 'bg-amber-500/5 border-amber-500/30 hover:bg-amber-500/10' : 'bg-black/20 border-white/5 opacity-60 grayscale'}`}>
+                            <div className="text-4xl">{r.icon}</div>
+                            <div>
+                              <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40 block mb-1">Recompensa Nvl {r.level} • {r.type}</span>
+                              <h4 className={`text-xl font-black uppercase italic tracking-tighter ${isUnlocked ? 'text-amber-400' : 'text-white/50'}`}>{r.name}</h4>
+                            </div>
+                            <div className="ml-auto">
+                               {isUnlocked ? (
+                                 <span className="px-4 py-2 bg-amber-500/20 text-amber-400 text-[10px] font-black uppercase tracking-widest rounded-xl border border-amber-500/30">Desbloqueado</span>
+                               ) : (
+                                 <span className="px-4 py-2 bg-black/50 text-white/30 text-[10px] font-black uppercase tracking-widest rounded-xl border border-white/5">Bloqueado</span>
+                               )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
             </div>
           </div>
         </div>

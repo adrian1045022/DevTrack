@@ -225,9 +225,13 @@ export async function generateMiniGameQuestions(techName: string) {
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       
-      const prompt = `Actúa como un desarrollador senior experto en ${techName}.
-      Genera un mini-quiz de 3 preguntas de opción múltiple muy técnicas y desafiantes sobre ${techName}.
-      Devuelve SOLO un array JSON válido sin formato markdown ni texto adicional.
+      const prompt = `Actúa como un desarrollador senior experto que está evaluando a un compañero sobre ${techName}.
+      Genera un mini-quiz de 5 preguntas de opción múltiple AVANZADAS sobre ${techName}.
+      Reglas estrictas:
+      1. NO hagas preguntas triviales o de definiciones básicas (ej. "¿Qué significan las siglas...?").
+      2. Enfócate en particularidades reales del lenguaje: manejo de memoria, asincronía, antipatrones, "quirks" sintácticos (cosas raras del lenguaje), o escenarios de debugging del mundo real.
+      3. Las opciones incorrectas deben parecer altamente plausibles para atrapar errores comunes.
+      4. Devuelve SOLO un array JSON válido sin formato markdown ni texto adicional.
       Estructura exacta: [{"question": "texto", "options": ["opción 1", "opción 2", "opción 3", "opción 4"], "correctIndex": número entero del 0 al 3}]`;
 
       const result = await model.generateContent(prompt);
@@ -241,14 +245,19 @@ export async function generateMiniGameQuestions(techName: string) {
   // Fallback a preguntas locales si falla o no hay API Key
   return [
     {
-      question: `¿Cuál es una práctica técnica recomendada al trabajar con ${techName}?`,
-      options: ["Evitar la modularidad", "Implementar lazy loading o code splitting", "No manejar los errores para ahorrar memoria", "Usar variables globales"],
+      question: `Al escalar un proyecto grande con ${techName}, ¿cuál es el antipatrón más peligroso para el rendimiento?`,
+      options: ["Usar nombres de variables largos", "Evitar el lazy loading y cargar todas las dependencias en memoria de inicio", "Usar demasiados comentarios", "Separar el código en módulos pequeños"],
       correctIndex: 1
     },
     {
-      question: `Para depurar un problema de rendimiento complejo en ${techName}, la mejor herramienta suele ser:`,
-      options: ["Poner console.logs en cada línea", "Reescribir el archivo entero", "Utilizar el Profiler y las DevTools", "Ignorarlo si en local funciona"],
+      question: `Para solucionar condiciones de carrera (race conditions) asíncronas en arquitecturas basadas en ${techName}, ¿qué enfoque garantiza consistencia?`,
+      options: ["Hacer que todo el código sea síncrono", "Ignorarlo si ocurre pocas veces", "Usar bloqueos (locks), semáforos o promesas inmutables según el paradigma", "Reiniciar el servidor periódicamente"],
       correctIndex: 2
+    },
+    {
+      question: `Cuando te enfrentas a un error de "Memory Leak" en memoria dinámica en ${techName}, el principal culpable suele ser:`,
+      options: ["No liberar recursos/handlers que ya no se usan (o suscripciones a eventos huérfanas)", "Usar bucles for", "Tener demasiados archivos importados", "Actualizar el compilador a una versión moderna"],
+      correctIndex: 0
     }
   ];
 }
