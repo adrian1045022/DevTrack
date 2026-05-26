@@ -213,6 +213,23 @@ export async function updateTechStatus(techId: string, newStatus: string) {
 }
 
 /* ==========================================
+   ROLES DE USUARIO
+   ========================================== */
+
+export async function getUserRole(userEmail: string) {
+  if (!userEmail) return 'user';
+
+  const { data, error } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('email', userEmail)
+    .single();
+
+  if (error || !data) return 'user'; // Si no existe en la tabla, es un usuario normal
+  return data.role;
+}
+
+/* ==========================================
    GAMIFICACIÓN Y MINI-JUEGOS (GEMINI AI)
    ========================================== */
 
@@ -225,13 +242,18 @@ export async function generateMiniGameQuestions(techName: string) {
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       
+      const randomSeed = Math.floor(Math.random() * 10000000);
+
       const prompt = `Actúa como un desarrollador senior experto que está evaluando a un compañero sobre ${techName}.
-      Genera un mini-quiz de 5 preguntas de opción múltiple AVANZADAS sobre ${techName}.
+      Genera un mini-quiz de 10 preguntas de opción múltiple MUY AVANZADAS sobre ${techName}.
+      Semilla de aleatoriedad obligatoria (para garantizar preguntas únicas cada vez): ${randomSeed}.
+      
       Reglas estrictas:
       1. NO hagas preguntas triviales o de definiciones básicas (ej. "¿Qué significan las siglas...?").
-      2. Enfócate en particularidades reales del lenguaje: manejo de memoria, asincronía, antipatrones, "quirks" sintácticos (cosas raras del lenguaje), o escenarios de debugging del mundo real.
-      3. Las opciones incorrectas deben parecer altamente plausibles para atrapar errores comunes.
-      4. Devuelve SOLO un array JSON válido sin formato markdown ni texto adicional.
+      2. DEBES ir a lo profundo: manejo de memoria, asincronía compleja, antipatrones, "quirks" sintácticos extraños, arquitectura y escenarios de debugging del mundo real.
+      3. Imagina que tienes un banco de 100,000 preguntas y eliges 10 al azar. NUNCA repitas preguntas típicas.
+      4. Las opciones incorrectas deben ser "distractores" muy lógicos que atrapen errores comunes de desarrolladores reales.
+      5. Devuelve SOLO un array JSON válido sin formato markdown ni texto adicional.
       Estructura exacta: [{"question": "texto", "options": ["opción 1", "opción 2", "opción 3", "opción 4"], "correctIndex": número entero del 0 al 3}]`;
 
       const result = await model.generateContent(prompt);
