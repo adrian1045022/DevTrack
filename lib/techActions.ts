@@ -10,15 +10,52 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
    DASHBOARD / STACK
    ========================================== */
 
+import * as admin from 'firebase-admin';
+
+// FUNCIÓN PARA INICIALIZAR FIREBASE ADMIN
+function getFirebaseAdmin() {
+  if (!admin.apps.length) {
+    try {
+      if (process.env.FIREBASE_ADMIN_CREDENTIALS) {
+        const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_CREDENTIALS);
+        admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+      } else {
+        admin.initializeApp(); // Fallback a Google Application Credentials si existe
+      }
+    } catch (e) {
+      console.error("Error initializing Firebase Admin:", e);
+    }
+  }
+  return admin;
+}
+
 export async function getTechnologies(userEmail: string) {
   if (!userEmail) return [];
   const { data, error } = await supabase
     .from('technologies')
     .select('*')
     .eq('user_email', userEmail)
+    .neq('name', '__DEVTRACK_ACCOUNT__') // Filtramos el marcador de cuenta
     .order('created_at', { ascending: false });
   if (error) return [];
   return data;
+}
+
+export async function recordUserLogin(userEmail: string) {
+  if (!userEmail) return;
+  // Comprobar si ya existe el marcador de cuenta
+  const { data } = await supabase.from('technologies')
+    .select('id')
+    .eq('user_email', userEmail)
+    .eq('name', '__DEVTRACK_ACCOUNT__')
+    .single();
+    
+  if (!data) {
+    // Si no existe, creamos un marcador invisible para registrar al usuario globalmente
+    await supabase.from('technologies').insert([{ 
+      name: '__DEVTRACK_ACCOUNT__', user_email: userEmail, status: 'Oculto', streak: 0, resources: [], notes: [] 
+    }]);
+  }
 }
 
 export async function addTechnology(formData: FormData, userEmail: string) {
@@ -157,6 +194,14 @@ export async function deleteCommunityPost(postId: string, userEmail: string) {
   revalidatePath('/profile');
 }
 
+export async function deleteCommunityPostAdmin(postId: string) {
+  await supabase.from('community_posts')
+    .delete()
+    .eq('id', postId);
+  revalidatePath('/community');
+  revalidatePath('/admin');
+}
+
 export async function getRelatedHacks(techName: string) {
   const { data, error } = await supabase
     .from('community_posts')
@@ -213,24 +258,93 @@ export async function updateTechStatus(techId: string, newStatus: string) {
 }
 
 /* ==========================================
-   ROLES DE USUARIO
+   ADMIN & PUBLIC PROFILES
    ========================================== */
 
-export async function getUserRole(userEmail: string) {
-  if (!userEmail) return 'user';
+export async function getAdminPlatformStats() {
+  // Get all techs
+  const { data: allTechs } = await supabase.from('technologies').select('name, user_email, status');
+  // Get all posts
+  const { data: allPosts } = await supabase.from('community_posts').select('author_email');
 
-  const { data, error } = await supabase
-    .from('user_roles')
-    .select('role')
-    .eq('email', userEmail)
-    .single();
+  const techs = allTechs || [];
+  const posts = allPosts || [];
 
-  if (error || !data) return 'user'; // Si no existe en la tabla, es un usuario normal
-  return data.role;
+  // Calculate unique users and popular techs
+  const userMap = new Map<string, { techs: number, posts: number, mastered: number }>();
+  const techCounts = new Map<string, number>();
+
+  techs.forEach((t: any) => {
+    if (!t.user_email) return;
+    const email = t.user_email;
+    if (!userMap.has(email)) userMap.set(email, { techs: 0, posts: 0, mastered: 0 });
+    const u = userMap.get(email)!;
+    u.techs++;
+    if (t.status === 'Dominado') u.mastered++;
+
+    const techName = t.name.trim().toUpperCase();
+    techCounts.set(techName, (techCounts.get(techName) || 0) + 1);
+  });
+
+  posts.forEach((p: any) => {
+    if (!p.author_email) return;
+    const email = p.author_email;
+    if (!userMap.has(email)) userMap.set(email, { techs: 0, posts: 0, mastered: 0 });
+    const u = userMap.get(email)!;
+    u.posts++;
+  });
+
+  const usersList = Array.from(userMap.entries()).map(([email, stats]) => ({
+    email,
+    username: email.split('@')[0],
+    ...stats
+  })).sort((a, b) => b.techs - a.techs);
+
+  const popularTechs = Array.from(techCounts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  return {
+    totalUsers: usersList.length,
+    totalTechs: techs.length,
+    totalPosts: posts.length,
+    popularTechs,
+    usersList
+  };
+}
+
+export async function adminWipeUserData(email: string) {
+  // Elimina toda la información del usuario en Supabase (Moderación extrema)
+  await supabase.from('technologies').delete().eq('user_email', email);
+  await supabase.from('community_posts').delete().eq('author_email', email);
+  revalidatePath('/admin');
+}
+
+export async function getUserPublicProfile(userEmail: string) {
+  // Fetch user's techs (including notes and resources for stats) and posts for their public profile
+  const { data: techs } = await supabase
+    .from('technologies')
+    .select('id, name, status, streak, notes, resources')
+    .eq('user_email', userEmail)
+    .order('created_at', { ascending: false });
+
+  const { data: posts } = await supabase
+    .from('community_posts')
+    .select('*')
+    .eq('author_email', userEmail)
+    .order('created_at', { ascending: false });
+
+  return {
+    email: userEmail,
+    username: userEmail.split('@')[0],
+    techs: techs || [],
+    posts: posts || []
+  };
 }
 
 /* ==========================================
-   GAMIFICACIÓN Y MINI-JUEGOS (GEMINI AI)
+   MINI-JUEGO (IA)
    ========================================== */
 
 export async function generateMiniGameQuestions(techName: string) {
