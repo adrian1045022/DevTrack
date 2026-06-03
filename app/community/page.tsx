@@ -125,7 +125,9 @@ export default function CommunityPage() {
             <div className="bg-[#1a1d23] p-8 rounded-3xl border border-white/5 text-slate-300 italic text-lg leading-relaxed mb-8 whitespace-pre-wrap relative z-10 text-left shadow-inner">"{post.content}"</div>
             
             <div className="flex justify-between items-center text-[10px] font-black uppercase text-white/10 tracking-[0.4em] relative z-10">
-              <span className="hover:text-indigo-400 transition-colors">By @{post.author}</span>
+              <Link href={`/u/${post.author_email || post.author}`} className="hover:text-indigo-400 transition-colors cursor-pointer">
+                By @{post.author}
+              </Link>
               <div className="flex items-center gap-6">
                 <span>{post.created_at ? new Date(post.created_at).toLocaleDateString() : ''}</span>
                 {post.author_email === user?.email && (

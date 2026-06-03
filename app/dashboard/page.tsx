@@ -7,7 +7,8 @@ import {
   addTechnology, getTechnologies, deleteTechnology, 
   addResourceToTech, removeResource, addNoteToTech, removeNote,
   getCommunityPosts, toggleLike, globalSearch, updateTechStatus,
-  recordUserLogin
+  recordUserLogin,
+  getUserRole
 } from '../../lib/techActions';
 import { UploadButton } from "../../lib/uploadthing";
 import Link from 'next/link';
@@ -16,6 +17,7 @@ import NoteRenderer from '../../components/NoteRenderer';
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [role, setRole] = useState<string>('user');
   const [techs, setTechs] = useState<any[]>([]);
   
   // ESTADOS DE FILTRADO Y BÚSQUEDA
@@ -109,6 +111,8 @@ export default function DashboardPage() {
         setUser(currentUser);
         if (currentUser.email) {
           await recordUserLogin(currentUser.email);
+          const userRole = await getUserRole(currentUser.email);
+          setRole(userRole);
         }
         
         const data = await getTechnologies(currentUser.email || "");
@@ -260,8 +264,8 @@ export default function DashboardPage() {
           </button>
 
           <Link href="/community" className="text-[10px] font-black text-white/30 hover:text-indigo-400 transition-all uppercase tracking-[0.3em] border border-white/5 px-6 py-2.5 rounded-xl bg-white/5">Comunidad</Link>
-          {user?.email === 'adrianperezperez86@gmail.com' && (
-            <Link href="/admin" className="text-[10px] font-black text-red-400 hover:text-red-300 transition-all uppercase tracking-[0.3em] border border-red-500/20 px-6 py-2.5 rounded-xl bg-red-500/10 shadow-[0_0_10px_rgba(239,68,68,0.2)]">Admin</Link>
+          {role === 'admin' && (
+            <Link href="/admin" className="text-[10px] font-black text-amber-400 hover:text-amber-300 transition-all uppercase tracking-[0.3em] border border-amber-500/20 px-6 py-2.5 rounded-xl bg-amber-500/10 shadow-[0_0_10px_rgba(245,158,11,0.2)]">Panel Admin</Link>
           )}
           <button onClick={() => signOut(auth)} className="bg-white/5 hover:bg-red-500/20 hover:text-red-400 text-[10px] font-black px-6 py-2.5 rounded-xl transition-all border border-white/5 uppercase text-white/40">Salir</button>
         </div>
@@ -411,7 +415,9 @@ export default function DashboardPage() {
                     {relatedHacks.map((hack) => (
                       <div key={hack.id} className="bg-[#1a1d23] rounded-[3.5rem] border border-white/5 p-10 shadow-2xl flex flex-col h-full group hover:border-indigo-500/20 transition-all text-left">
                         <div className="flex justify-between items-start mb-8 text-left">
-                          <span className="text-[11px] font-black text-white/10 uppercase tracking-[0.3em]">Hack by @{hack.author}</span>
+                          <Link href={`/u/${hack.author_email || hack.author}`} className="text-[11px] font-black text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-[0.3em] cursor-pointer">
+                            Hack by @{hack.author}
+                          </Link>
                           <span className="text-2xl opacity-40 group-hover:opacity-100 transition-all">🎥</span>
                         </div>
                         <h5 className="text-2xl font-black italic uppercase text-white/90 mb-8 leading-tight tracking-tighter text-left">{hack.title}</h5>
