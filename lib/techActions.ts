@@ -622,7 +622,7 @@ export async function getAdminPlatformStats() {
       });
       pageToken = listUsersResult.pageToken;
     } while (pageToken);
-  } catch (err) {
+  } catch (err: any) {
     console.error("Error obteniendo usuarios de Firebase:", err);
     firebaseSyncError = err.message || "Error desconocido al conectar con Firebase Auth.";
   }
