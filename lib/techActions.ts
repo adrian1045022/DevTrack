@@ -335,17 +335,20 @@ export async function addCommentToPost(postId: string, userEmail: string, conten
   if (fetchErr) throw new Error(fetchErr.message);
   const currentComments = Array.isArray(post?.comments) ? post.comments : [];
   
-  // Obtener el username real si existe
+  // Obtener el username real y el avatar si existen
   let authorName = userEmail.split('@')[0];
-  const { data: profile } = await supabase.from('user_profiles').select('username').ilike('email', userEmail).limit(1);
-  if (profile && profile.length > 0 && profile[0].username) {
-    authorName = profile[0].username;
+  let avatarUrl = null;
+  const { data: profile } = await supabase.from('user_profiles').select('username, avatar_url').ilike('email', userEmail).limit(1);
+  if (profile && profile.length > 0) {
+    if (profile[0].username) authorName = profile[0].username;
+    if (profile[0].avatar_url) avatarUrl = profile[0].avatar_url;
   }
 
   const newComment = {
     id: crypto.randomUUID(),
     author: authorName,
     author_email: userEmail,
+    avatar_url: avatarUrl,
     content,
     created_at: new Date().toISOString()
   };

@@ -159,7 +159,8 @@ export default function MiPerfilPage() {
     try {
       const tempComment = {
         id: Date.now().toString(),
-        author: user.email.split('@')[0],
+        author: profile?.username || user.email.split('@')[0],
+        avatar_url: profile?.avatar_url || null,
         content,
         created_at: new Date().toISOString()
       };
@@ -384,7 +385,9 @@ export default function MiPerfilPage() {
             <div className="flex-1">
               {Array.isArray(selectedPost.comments) && selectedPost.comments.map((comment: any) => (
                 <div key={comment.id} className="p-6 border-b border-white/5 flex gap-4 hover:bg-white/[0.02] transition-colors">
-                  <div className="w-10 h-10 bg-indigo-500/10 border border-indigo-500/20 rounded-full shrink-0 flex items-center justify-center font-black text-indigo-400 text-xs shadow-inner">{(comment.author || 'U').substring(0, 2).toUpperCase()}</div>
+                  <div className="w-10 h-10 bg-indigo-500/10 border border-indigo-500/20 rounded-full shrink-0 flex items-center justify-center font-black text-indigo-400 text-xs shadow-inner overflow-hidden">
+                    {comment.avatar_url ? <img src={comment.avatar_url} alt="avatar" className="w-full h-full object-cover" /> : (comment.author || 'U').substring(0, 2).toUpperCase()}
+                  </div>
                   <div>
                     <div className="flex gap-2 items-center mb-1">
                       <Link href={`/u/${comment.author_email?.split('@')[0] || comment.author}`} className="font-black text-white text-sm hover:underline">{comment.author || 'Usuario'}</Link>
