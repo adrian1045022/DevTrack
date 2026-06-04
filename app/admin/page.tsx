@@ -5,6 +5,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { getCommunityPosts, deleteCommunityPostAdmin, getAdminPlatformStats, adminWipeUserData, setAdminRole, getUserRole } from '../../lib/techActions';
 import Link from 'next/link';
+import Swal from 'sweetalert2';
 
 export default function AdminPage() {
   const [loading, setLoading] = useState(true);
@@ -43,28 +44,79 @@ export default function AdminPage() {
   }, [router]);
 
   const handleDelete = async (postId: string, authorEmail: string) => {
-    if(confirm("¿Estás seguro de que quieres borrar el post de " + authorEmail + "?")) {
+    const result = await Swal.fire({
+      title: '¿Estás seguro?',
+      text: "¿Estás seguro de que quieres borrar el post de " + authorEmail + "?",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#3b82f6',
+      confirmButtonText: 'Sí, borrar',
+      cancelButtonText: 'Cancelar',
+      background: '#1a1d24',
+      color: '#fff'
+    });
+    if(result.isConfirmed) {
       await deleteCommunityPostAdmin(postId);
       await fetchData();
+      Swal.fire({ title: '¡Borrado!', text: 'El post ha sido eliminado.', icon: 'success', background: '#1a1d24', color: '#fff' });
     }
   };
 
   const handleWipeUser = async (email: string) => {
-    if(confirm(`⚠️ ALERTA: ¿Estás 100% seguro de borrar todos los datos de ${email}? Perderán su stack y sus posts. Esta acción es irreversible.`)) {
-      const p = prompt(`Para confirmar, escribe el correo del usuario: ${email}`);
+    const result = await Swal.fire({
+      title: '⚠️ ALERTA PELIGRO',
+      text: `¿Estás 100% seguro de borrar todos los datos de ${email}? Perderán su stack y sus posts. Esta acción es irreversible.`,
+      icon: 'error',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#3b82f6',
+      confirmButtonText: 'Sí, borrar todo',
+      cancelButtonText: 'Cancelar',
+      background: '#1a1d24',
+      color: '#fff'
+    });
+    if(result.isConfirmed) {
+      const { value: p } = await Swal.fire({
+        title: 'Confirmación requerida',
+        input: 'text',
+        inputLabel: `Para confirmar, escribe el correo del usuario: ${email}`,
+        inputPlaceholder: email,
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#3b82f6',
+        confirmButtonText: 'Confirmar',
+        cancelButtonText: 'Cancelar',
+        background: '#1a1d24',
+        color: '#fff'
+      });
       if (p === email) {
         await adminWipeUserData(email);
         await fetchData();
+        Swal.fire({ title: '¡Borrado!', text: 'Todos los datos del usuario han sido eliminados.', icon: 'success', background: '#1a1d24', color: '#fff' });
       } else {
-        alert("El correo no coincide. Cancelando...");
+        if (p) Swal.fire({ title: 'Cancelado', text: 'El correo no coincide. Cancelando...', icon: 'info', background: '#1a1d24', color: '#fff' });
       }
     }
   };
 
   const handleRoleChange = async (email: string, newRole: string) => {
-    if(confirm(`¿Estás seguro de cambiar el rol de ${email} a ${newRole.toUpperCase()}?`)) {
+    const result = await Swal.fire({
+      title: 'Cambio de Rol',
+      text: `¿Estás seguro de cambiar el rol de ${email} a ${newRole.toUpperCase()}?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#3b82f6',
+      confirmButtonText: 'Sí, cambiar',
+      cancelButtonText: 'Cancelar',
+      background: '#1a1d24',
+      color: '#fff'
+    });
+    if(result.isConfirmed) {
       await setAdminRole(email, newRole);
       await fetchData();
+      Swal.fire({ title: '¡Actualizado!', text: 'El rol ha sido modificado.', icon: 'success', background: '#1a1d24', color: '#fff' });
     }
   };
 
@@ -155,21 +207,6 @@ export default function AdminPage() {
                 <h3 className="text-[10px] font-black uppercase text-red-400 tracking-[0.2em] mb-2">Techs Dominadas</h3>
                 <p className="text-5xl font-black text-white group-hover:text-red-400 transition-colors">{stats.totalMastered}</p>
               </div>
-            </div>
-
-            <div className="bg-[#1a1d24]/60 backdrop-blur-md p-10 rounded-[3rem] border border-white/10 text-left shadow-xl flex-shrink-0 mb-8">
-               <div className="flex items-center gap-4 mb-6">
-                 <h3 className="text-2xl font-black italic uppercase text-red-400 tracking-tighter">Acciones de Sistema</h3>
-               </div>
-               <div className="bg-black/30 p-6 rounded-2xl border border-white/5 flex flex-col md:flex-row gap-4 items-center shadow-inner">
-                 <div className="flex-1 w-full">
-                   <h4 className="text-xs font-black uppercase text-white/90 mb-2">Mensaje Global (Broadcast)</h4>
-                   <input type="text" placeholder="Escribe un anuncio para todos los usuarios..." className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white outline-none focus:border-red-500/50 transition-all placeholder:text-white/20" />
-                 </div>
-                 <button onClick={() => alert("¡Mensaje enviado a todos los usuarios conectados!")} className="w-full md:w-auto bg-red-500 text-white font-black uppercase tracking-widest px-8 py-4 rounded-xl shadow-lg hover:brightness-110 transition-all text-[10px] mt-4 md:mt-0 whitespace-nowrap">
-                   Enviar Anuncio
-                 </button>
-               </div>
             </div>
 
             <div className="bg-[#1a1d24]/60 backdrop-blur-md p-10 rounded-[3rem] border border-white/10 text-left shadow-xl flex-shrink-0">

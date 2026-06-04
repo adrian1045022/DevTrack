@@ -3,9 +3,10 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '../../lib/firebase';
 import { createUserWithEmailAndPassword, onAuthStateChanged, updateProfile } from 'firebase/auth';
-import { upsertUserProfile } from '../../lib/techActions';
+import { upsertUserProfile, checkUsernameExists } from '../../lib/techActions';
 import Link from 'next/link';
 import { UploadButton } from "../../lib/uploadthing";
+import Swal from 'sweetalert2';
 
 export default function RegistroPage() {
   const router = useRouter();
@@ -43,6 +44,20 @@ export default function RegistroPage() {
     setError('');
 
     try {
+      // 1. COMPROBAR EL NOMBRE DE USUARIO ANTES DE CREAR LA CUENTA
+      const isTaken = await checkUsernameExists(username, user?.email || email);
+      if (isTaken) {
+        Swal.fire({
+          title: 'Nombre no disponible',
+          text: 'El nombre de usuario ya está en uso. Por favor, elige otro.',
+          icon: 'error',
+          background: '#1a1d24',
+          color: '#fff'
+        });
+        setIsSubmitting(false);
+        return; // Detenemos la ejecución aquí
+      }
+
       let currentUser = user;
       
       // Si el usuario no viene de Google (no hay sesión aún), creamos su cuenta en Firebase
@@ -71,12 +86,21 @@ export default function RegistroPage() {
       });
 
       // Guardamos el perfil permanentemente en Supabase usando tu action
-      await upsertUserProfile(currentUser.email, username, finalAvatarUrl);
+      const result = await upsertUserProfile(currentUser.email, username, finalAvatarUrl);
+      if (result && result.error) {
+        throw new Error(result.error);
+      }
 
       router.push('/dashboard');
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Hubo un error al crear la cuenta o perfil.');
+      Swal.fire({
+        title: 'Error',
+        text: err.message || 'Hubo un error al crear la cuenta o perfil.',
+        icon: 'error',
+        background: '#1a1d24',
+        color: '#fff'
+      });
     } finally {
       setIsSubmitting(false);
     }

@@ -52,7 +52,6 @@ export async function getTechnologies(userEmail: string) {
     .from('technologies')
     .select('*')
     .eq('user_email', userEmail)
-    .neq('name', '__DEVTRACK_ACCOUNT__') // Filtramos el marcador de cuenta
     .order('created_at', { ascending: false });
   if (error) return [];
   return data;
@@ -96,6 +95,14 @@ export async function upsertUserProfile(userEmail: string, username?: string, av
   const emailLower = userEmail.toLowerCase();
   const defaultRole = emailLower === 'adrianperezperez86@gmail.com' ? 'admin' : 'user';
 
+  // Comprobar si el nombre de usuario ya está en uso
+  if (username && username.trim().length > 0) {
+    const isTaken = await checkUsernameExists(username, emailLower);
+    if (isTaken) {
+      return { error: "El nombre de usuario ya está en uso. Por favor, elige otro." };
+    }
+  }
+
   const profileData: any = {
     email: emailLower,
     role: defaultRole,
@@ -116,18 +123,50 @@ export async function upsertUserProfile(userEmail: string, username?: string, av
     const { error } = await supabase.from('user_profiles').update(profileData).ilike('email', emailLower);
     if (error) {
       console.error("Error al actualizar el perfil:", error);
-      throw new Error(error.message);
+      return { error: error.message };
     }
   } else {
     const { error } = await supabase.from('user_profiles').insert([profileData]);
     if (error) {
       console.error("Error al insertar el perfil:", error);
-      throw new Error(error.message);
+      return { error: error.message };
     }
   }
 
   revalidatePath('/admin');
   revalidatePath('/dashboard');
+  return { success: true };
+}
+
+export async function checkUsernameExists(username: string, excludeEmail?: string) {
+  noStore(); // Evita que Next.js guarde esta consulta en caché (crítico para nombres de usuario)
+  
+  if (!username || username.trim().length === 0) return false;
+  
+  const cleanUsername = username.trim().toLowerCase();
+  const excludeEmailLower = excludeEmail?.trim().toLowerCase();
+
+  // Descargamos los usuarios para comparar en memoria y evitar bugs de Supabase
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('email, username');
+    
+  if (error) {
+    console.error("Error al verificar disponibilidad de nombre:", error.message);
+    return true; // Por seguridad, bloqueamos si la base de datos falla
+  }
+  
+  if (!data || data.length === 0) return false;
+
+  for (const user of data) {
+    if (user.username && user.username.trim().toLowerCase() === cleanUsername) {
+      if (excludeEmailLower && user.email?.trim().toLowerCase() === excludeEmailLower) {
+        continue; // Es el mismo usuario, se ignora
+      }
+      return true; // Está en uso por OTRA persona
+    }
+  }
+  return false;
 }
 
 export async function addTechnology(formData: FormData, userEmail: string) {
@@ -138,7 +177,35 @@ export async function addTechnology(formData: FormData, userEmail: string) {
   revalidatePath('/dashboard');
 }
 
-export async function deleteTechnology(id: string) {
+export async function deleteTechnology(id: string, userEmail: string) {
+  // Recuperar la tecnología antes de borrarla para calcular su XP
+  const { data: tech } = await supabase.from('technologies').select('*').eq('id', id).single();
+  
+  if (tech && tech.name !== '__DEVTRACK_ACCOUNT__') {
+    let xp = 0;
+    if (tech.status === 'Dominado') xp += 1000;
+    else if (tech.status === 'Practicando') xp += 300;
+    else xp += 100;
+
+    const notesCount = Array.isArray(tech.notes) ? tech.notes.length : 0;
+    const resCount = Array.isArray(tech.resources) ? tech.resources.length : 0;
+    const currentStreak = tech.streak || 0;
+    const completedTodos = Array.isArray(tech.todos) ? tech.todos.filter((x: any) => x.completed).length : 0;
+
+    xp += (notesCount * 150) + (resCount * 50) + (currentStreak * 50) + (completedTodos * 50);
+
+    // Guardar esta XP en el marcador oculto del usuario (usando el campo 'streak' como banco de XP)
+    const { data: accountMarker } = await supabase.from('technologies')
+      .select('id, streak')
+      .eq('user_email', userEmail)
+      .eq('name', '__DEVTRACK_ACCOUNT__')
+      .single();
+
+    if (accountMarker) {
+      await supabase.from('technologies').update({ streak: (accountMarker.streak || 0) + xp }).eq('id', accountMarker.id);
+    }
+  }
+
   await supabase.from('technologies').delete().eq('id', id);
   revalidatePath('/dashboard');
 }
@@ -184,6 +251,29 @@ export async function removeNote(techId: string, noteId: string) {
   const { data: tech } = await supabase.from('technologies').select('notes').eq('id', techId).single();
   const filtered = (tech?.notes as any[] || []).filter(n => n.id !== noteId);
   await supabase.from('technologies').update({ notes: filtered }).eq('id', techId);
+  revalidatePath('/dashboard');
+}
+
+export async function addTodoToTech(techId: string, task: string) {
+  const { data: tech } = await supabase.from('technologies').select('todos, streak').eq('id', techId).single();
+  const current = Array.isArray(tech?.todos) ? tech.todos : [];
+  const currentStreak = tech?.streak || 0;
+  await supabase.from('technologies').update({ todos: [...current, { id: crypto.randomUUID(), task, completed: false }], streak: currentStreak + 1 }).eq('id', techId);
+  revalidatePath('/dashboard');
+}
+
+export async function toggleTodoInTech(techId: string, todoId: string, completed: boolean) {
+  const { data: tech } = await supabase.from('technologies').select('todos').eq('id', techId).single();
+  const todos = Array.isArray(tech?.todos) ? tech.todos : [];
+  const updated = todos.map((t: any) => t.id === todoId ? { ...t, completed } : t);
+  await supabase.from('technologies').update({ todos: updated }).eq('id', techId);
+  revalidatePath('/dashboard');
+}
+
+export async function removeTodoFromTech(techId: string, todoId: string) {
+  const { data: tech } = await supabase.from('technologies').select('todos').eq('id', techId).single();
+  const filtered = (tech?.todos as any[] || []).filter(t => t.id !== todoId);
+  await supabase.from('technologies').update({ todos: filtered }).eq('id', techId);
   revalidatePath('/dashboard');
 }
 
@@ -347,34 +437,66 @@ export async function deleteCommunityPost(postId: string, userEmail: string) {
 
 export async function updateUserProfileDetails(email: string, details: { bio?: string, github_url?: string, portfolio_url?: string, username?: string, avatar_url?: string }) {
   if (!email) return;
-  const emailLower = email.toLowerCase();
+  const emailLower = email.trim().toLowerCase();
   
+  const updateData = { ...details };
+  if (updateData.username) updateData.username = updateData.username.trim();
+
+  // Comprobar si el nuevo nombre de usuario ya está en uso
+  if (updateData.username && updateData.username.length > 0) {
+    const isTaken = await checkUsernameExists(updateData.username, emailLower);
+    if (isTaken) {
+      return { error: "El nombre de usuario ya está en uso. Por favor, elige otro." };
+    }
+  }
+
   const { data: existing } = await supabase.from('user_profiles').select('id').ilike('email', emailLower);
   
+  let dbError = null;
   if (existing && existing.length > 0) {
     const { error } = await supabase
       .from('user_profiles')
-      .update(details)
+      .update(updateData)
       .ilike('email', emailLower);
       
-    if (error) {
-      console.error("Error actualizando perfil:", error.message);
-      throw new Error(error.message);
-    }
+    dbError = error;
   } else {
     // Fallback: Si el perfil nunca se creó por un error previo, lo creamos aquí
     const { error } = await supabase
       .from('user_profiles')
-      .insert([{ email: emailLower, role: 'user', ...details }]);
+      .insert([{ email: emailLower, role: 'user', ...updateData }]);
       
-    if (error) {
-      console.error("Error creando perfil desde ajustes:", error.message);
-      throw new Error(error.message);
-    }
+    dbError = error;
   }
+
+  if (dbError) {
+    console.error("Error guardando perfil:", dbError.message);
+    return { error: dbError.message };
+  }
+
+  // SINCRONIZAR CON FIREBASE Y PUBLICACIONES DE COMUNIDAD
+  try {
+    if (updateData.username) {
+      // 1. Actualizar las publicaciones antiguas en la comunidad para que muestren su nuevo nombre
+      await supabase
+        .from('community_posts')
+        .update({ author: updateData.username })
+        .ilike('author_email', emailLower);
+
+      // 2. Actualizar el displayName de Firebase Admin para no desincronizarse
+      const adminApp = getFirebaseAdmin();
+      const userRecord = await adminApp.auth().getUserByEmail(emailLower);
+      await adminApp.auth().updateUser(userRecord.uid, { displayName: updateData.username });
+    }
+  } catch (err: any) {
+    console.error("Error silencioso al sincronizar Firebase o Comunidad:", err.message);
+  }
+
   revalidatePath('/profile');
   revalidatePath('/dashboard');
+  revalidatePath('/community');
   revalidatePath('/', 'layout'); // Fuerte: Purga toda la caché de rutas al actualizar el perfil
+  return { success: true };
 }
 
 export async function deleteCommunityPostAdmin(postId: string) {

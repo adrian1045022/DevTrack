@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { getMyPosts, getSavedPosts, getUserProfile, updateUserProfileDetails, deleteCommunityPost, toggleLike, toggleSavePost, addCommentToPost } from '../../lib/techActions';
 import { UploadButton } from "../../lib/uploadthing";
 import { createClient } from '@supabase/supabase-js';
+import Swal from 'sweetalert2';
 
 export default function MiPerfilPage() {
   const router = useRouter();
@@ -97,18 +98,34 @@ export default function MiPerfilPage() {
     setIsSaving(true);
     
     try {
-      await updateUserProfileDetails(user.email, {
+      const result = await updateUserProfileDetails(user.email, {
         username: username.trim(),
         avatar_url: avatarUrl,
         bio, github_url: github, portfolio_url: portfolio
       });
+
+      // DETECTAMOS SI EL BACKEND DEVOLVIÓ EL ERROR DE NOMBRE DUPLICADO
+      if (result && result.error) {
+        Swal.fire({
+          title: 'No se pudo actualizar',
+          text: result.error, // "El nombre de usuario ya está en uso..."
+          icon: 'error',
+          background: '#1a1d24',
+          color: '#fff'
+        });
+        setIsSaving(false);
+        return; // IMPORTANTE: Esto detiene la función para que no salga el toast de éxito
+      }
+
       const p = await getUserProfile(user.email);
       setProfile(p);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 4000);
     } catch (err: any) {
       console.error(err);
-      alert("❌ Error al guardar en base de datos: " + err.message);
+      Swal.fire({
+        title: 'Error Inesperado', text: err.message, icon: 'error', background: '#1a1d24', color: '#fff'
+      });
     } finally {
       setIsSaving(false);
       router.refresh();

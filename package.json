@@ -22,6 +22,7 @@
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "sweetalert2": "^11.26.25",
     "uploadthing": "^7.7.4"
   },
   "devDependencies": {

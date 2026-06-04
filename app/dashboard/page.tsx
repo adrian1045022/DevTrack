@@ -7,12 +7,14 @@ import {
   addTechnology, getTechnologies, deleteTechnology, 
   addResourceToTech, removeResource, addNoteToTech, removeNote,
   getCommunityPosts, toggleLike, globalSearch, updateTechStatus,
-  recordUserLogin, getUserRole
+  recordUserLogin, getUserRole,
+  addTodoToTech, toggleTodoInTech, removeTodoFromTech
 } from '../../lib/techActions';
 import { UploadButton } from "../../lib/uploadthing";
 import Link from 'next/link';
 import NoteRenderer from '../../components/NoteRenderer';
 import confetti from 'canvas-confetti';
+import Swal from 'sweetalert2';
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -29,6 +31,7 @@ export default function DashboardPage() {
   const [relatedHacks, setRelatedHacks] = useState<any[]>([]);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [noteTitle, setNoteTitle] = useState("");
+  const [newTodo, setNewTodo] = useState("");
   const [noteContent, setNoteContent] = useState("");
   const [viewingNote, setViewingNote] = useState<any>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -59,6 +62,7 @@ export default function DashboardPage() {
 
   // Lógica de filtrado para el Grid principal
   const filteredTechs = useMemo(() => techs.filter(t => {
+    if (t.name === '__DEVTRACK_ACCOUNT__') return false; // Ocultar el marcador de cuenta
     if (activeFilter === "TODOS") return true;
     // Comparamos el status de la DB con el filtro activo
     return t.status.toUpperCase() === activeFilter;
@@ -130,6 +134,11 @@ export default function DashboardPage() {
     const stats = { learning: 0, practicing: 0, mastered: 0, notes: 0, resources: 0, maxStreak: 0 };
     
     techs.forEach(t => {
+      if (t.name === '__DEVTRACK_ACCOUNT__') {
+        xp += t.streak || 0; // Sumar la XP legada de tecnologías borradas
+        return;
+      }
+
       if (t.status === 'Dominado') { xp += 1000; stats.mastered++; }
       else if (t.status === 'Practicando') { xp += 300; stats.practicing++; }
       else { xp += 100; stats.learning++; }
@@ -137,10 +146,12 @@ export default function DashboardPage() {
       const notesCount = t.notes?.length || 0;
       const resCount = t.resources?.length || 0;
       const currentStreak = t.streak || 0;
+      const completedTodos = t.todos?.filter((x: any) => x.completed).length || 0;
 
       xp += notesCount * 150;
       xp += resCount * 50;
       xp += currentStreak * 50;
+      xp += completedTodos * 50;
 
       stats.notes += notesCount;
       stats.resources += resCount;
@@ -195,10 +206,11 @@ export default function DashboardPage() {
   }, [techs]);
 
   const exportMyProgress = () => {
-    let csv = "Tecnologia,Estado,Apuntes,Recursos,Racha\n";
+    let csv = "Tecnologia,Estado,Apuntes,Recursos,Objetivos,Racha\n";
     techs.forEach(t => {
       if (t.name !== '__DEVTRACK_ACCOUNT__') {
-        csv += `${t.name},${t.status},${t.notes?.length || 0},${t.resources?.length || 0},${t.streak || 0}\n`;
+        const compTodos = t.todos?.filter((x: any) => x.completed).length || 0;
+        csv += `${t.name},${t.status},${t.notes?.length || 0},${t.resources?.length || 0},${compTodos}/${t.todos?.length || 0},${t.streak || 0}\n`;
       }
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -228,6 +240,13 @@ export default function DashboardPage() {
       await refresh(user.email);
       setShowAddModal(false);
     } catch (error) { console.error(error); } finally { setIsAdding(false); }
+  };
+
+  const handleAddTodo = () => {
+    if (!newTodo.trim() || !selectedTech) return;
+    const task = newTodo.trim();
+    setNewTodo("");
+    addTodoToTech(selectedTech.id, task).then(() => refresh(user?.email));
   };
 
   if (loading) return <div className="min-h-screen bg-[#1e2227] flex items-center justify-center text-indigo-400 font-black italic uppercase text-2xl animate-pulse">Sincronizando Stack...</div>;
@@ -302,7 +321,7 @@ export default function DashboardPage() {
             <Link href="/admin" className="text-[10px] font-black text-amber-400 hover:text-amber-300 transition-all uppercase tracking-[0.3em] border border-amber-500/20 px-6 py-2.5 rounded-xl bg-amber-500/10 shadow-[0_0_10px_rgba(245,158,11,0.2)]">Panel Admin</Link>
           )}
           <Link href="/profile" className="bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white text-[10px] font-black px-6 py-2.5 rounded-xl transition-all border border-indigo-500/20 uppercase tracking-widest">Mi Perfil</Link>
-          <button onClick={() => signOut(auth)} className="bg-white/5 hover:bg-red-500/20 hover:text-red-400 text-[10px] font-black px-6 py-2.5 rounded-xl transition-all border border-white/5 uppercase text-white/40">Salir</button>
+          <button onClick={() => signOut(auth)} className="bg-red-500/10 hover:bg-red-600 text-red-500 hover:text-white text-[10px] font-black px-6 py-2.5 rounded-xl transition-all border border-red-500/20 uppercase tracking-widest shadow-lg shadow-red-500/10">Salir</button>
         </div>
       </nav>
 
@@ -356,7 +375,26 @@ export default function DashboardPage() {
                   t.status === 'Practicando' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 
                   'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
                 }`}>{t.status}</span>
-                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if(confirm("¿Borrar?")) deleteTechnology(t.id).then(() => refresh(user.email)); }} className="text-white/10 hover:text-red-500 transition-all p-2 text-xl z-20">✕</button>
+                <button onClick={(e) => { 
+                  e.preventDefault(); 
+                  e.stopPropagation(); 
+                  Swal.fire({
+                    title: '¿Borrar tecnología?',
+                    text: '¿Estás seguro de eliminar esto del stack?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#ef4444',
+                    cancelButtonColor: '#3b82f6',
+                    confirmButtonText: 'Sí, borrar',
+                    cancelButtonText: 'Cancelar',
+                    background: '#1e2227',
+                    color: '#fff'
+                  }).then((result) => {
+                    if (result.isConfirmed) {
+                      deleteTechnology(t.id, user.email).then(() => refresh(user.email));
+                    }
+                  });
+                }} className="text-white/10 hover:text-red-500 transition-all p-2 text-xl z-20">✕</button>
               </div>
               <h3 className="text-4xl font-black italic uppercase text-white/90 mb-2 tracking-tighter group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-white group-hover:to-white/50 transition-all text-left relative z-10">{t.name}</h3>
               <p className="text-[10px] font-black text-indigo-400/50 uppercase tracking-[0.3em] mb-4 opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-2 group-hover:translate-y-0">Entrar al Workspace →</p>
@@ -365,6 +403,7 @@ export default function DashboardPage() {
                  <div className="flex gap-3 font-black text-[10px] uppercase tracking-widest text-white/20">
                     <span className="bg-black/30 px-4 py-2 rounded-xl border border-white/5 backdrop-blur-sm">📄 {t.resources?.length || 0}</span>
                     <span className="bg-black/30 px-4 py-2 rounded-xl border border-white/5 backdrop-blur-sm">📝 {t.notes?.length || 0}</span>
+                    <span className="bg-black/30 px-4 py-2 rounded-xl border border-white/5 backdrop-blur-sm" title="Objetivos Completados">✅ {(t.todos?.filter((x: any) => x.completed)?.length) || 0}/{t.todos?.length || 0}</span>
                     {(t.streak || 0) > 0 && (
                       <span className="bg-orange-500/10 text-orange-400 px-4 py-2 rounded-xl border border-orange-500/20 shadow-[0_0_10px_rgba(249,115,22,0.15)] transition-all">🔥 {t.streak}</span>
                     )}
@@ -419,6 +458,27 @@ export default function DashboardPage() {
             <div className="flex-1 overflow-y-auto p-12 scrollbar-hide text-left">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-20">
                 <div className="space-y-8">
+                  {/* OBJETIVOS / ROADMAP */}
+                  <div className="bg-[#1a1d23] border border-white/5 rounded-3xl p-8 shadow-xl">
+                    <div className="flex items-center justify-between mb-6">
+                      <h4 className="text-[12px] font-black uppercase text-emerald-400 italic tracking-[0.2em]">Objetivos / Roadmap</h4>
+                      <span className="text-[10px] font-black bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/20">{selectedTech.todos?.filter((t: any) => t.completed).length || 0} / {selectedTech.todos?.length || 0}</span>
+                    </div>
+                    <div className="flex gap-3 mb-6">
+                      <input value={newTodo} onChange={e => setNewTodo(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddTodo()} placeholder="Ej: Aprender Hooks..." className="flex-1 bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-white outline-none focus:border-emerald-500 transition-all" />
+                      <button onClick={handleAddTodo} disabled={!newTodo.trim()} className="bg-emerald-500 text-white px-6 py-3 rounded-xl font-black text-lg disabled:opacity-50 hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20">+</button>
+                    </div>
+                    <div className="space-y-3 max-h-48 overflow-y-auto scrollbar-hide pr-2">
+                      {Array.isArray(selectedTech.todos) && selectedTech.todos.length > 0 ? selectedTech.todos.map((todo: any) => (
+                        <div key={todo.id} className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${todo.completed ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-black/20 border-white/5 hover:border-emerald-500/30'}`}>
+                          <input type="checkbox" checked={todo.completed} onChange={(e) => toggleTodoInTech(selectedTech.id, todo.id, e.target.checked).then(()=>refresh(user.email))} className="w-5 h-5 accent-emerald-500 cursor-pointer" />
+                          <span className={`flex-1 text-[12px] font-bold uppercase tracking-widest ${todo.completed ? 'line-through text-white/30' : 'text-white/80'}`}>{todo.task}</span>
+                          <button onClick={() => removeTodoFromTech(selectedTech.id, todo.id).then(()=>refresh(user.email))} className="text-white/10 hover:text-red-500 font-black">✕</button>
+                        </div>
+                      )) : <p className="text-white/20 text-center italic py-4 uppercase tracking-widest text-[10px]">Añade tu primer objetivo</p>}
+                    </div>
+                  </div>
+
                   <div className="flex items-center justify-between px-2">
                     <h4 className="text-[12px] font-black uppercase text-indigo-400 italic tracking-[0.2em]">Apuntes</h4>
                     <button onClick={() => setShowNoteForm(true)} className="text-[10px] font-black bg-indigo-500 text-white px-8 py-3 rounded-2xl hover:brightness-110 shadow-xl tracking-widest uppercase">+ NOTA</button>
@@ -437,6 +497,17 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="space-y-8 border-l border-white/5 pl-12 text-left">
+                  {/* EXPLORADOR DE CONOCIMIENTO */}
+                  <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-3xl p-8 shadow-xl">
+                    <h4 className="text-[12px] font-black uppercase text-indigo-400 italic tracking-[0.2em] mb-6">Explorador Rápido</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(selectedTech.name)}+tutorial+español`} target="_blank" rel="noreferrer" className="bg-black/30 hover:bg-[#ff0000]/20 border border-white/5 hover:border-[#ff0000]/50 text-white/70 hover:text-white px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center flex flex-col gap-1 items-center justify-center"><span>🎥</span> YouTube</a>
+                      <a href={`https://github.com/search?q=${encodeURIComponent(selectedTech.name)}&type=repositories`} target="_blank" rel="noreferrer" className="bg-black/30 hover:bg-white/20 border border-white/5 hover:border-white/50 text-white/70 hover:text-white px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center flex flex-col gap-1 items-center justify-center"><span>💻</span> GitHub</a>
+                      <a href={`https://stackoverflow.com/search?q=${encodeURIComponent(selectedTech.name)}`} target="_blank" rel="noreferrer" className="bg-black/30 hover:bg-[#f48024]/20 border border-white/5 hover:border-[#f48024]/50 text-white/70 hover:text-white px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center flex flex-col gap-1 items-center justify-center"><span>🗂️</span> Stack</a>
+                      <a href={`https://devdocs.io/search?q=${encodeURIComponent(selectedTech.name)}`} target="_blank" rel="noreferrer" className="bg-black/30 hover:bg-emerald-500/20 border border-white/5 hover:border-emerald-500/50 text-white/70 hover:text-white px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center flex flex-col gap-1 items-center justify-center"><span>📚</span> DevDocs</a>
+                    </div>
+                  </div>
+
                   <h4 className="text-[12px] font-black uppercase text-white/20 italic tracking-[0.2em] text-center">Recursos Extra</h4>
                   <div className="space-y-4">
                     {selectedTech.resources?.map((file: any, idx: number) => (
@@ -449,7 +520,7 @@ export default function DashboardPage() {
                       </div>
                     ))}
                   </div>
-                  <UploadButton endpoint="techAttachment" onClientUploadComplete={(res) => { if (res) addResourceToTech(selectedTech.id, res[0].url, res[0].name).then(() => refresh(user.email)); }} onUploadError={(e) => alert(e.message)} content={{ button: "AÑADIR ARCHIVO" }} appearance={{ button: "w-full bg-white/5 text-white/40 text-[14px] font-black py-10 rounded-[2.5rem] hover:bg-white/10 border border-white/5 transition-all uppercase tracking-widest", allowedContent: "hidden" }} />
+                  <UploadButton endpoint="techAttachment" onClientUploadComplete={(res) => { if (res) addResourceToTech(selectedTech.id, res[0].url, res[0].name).then(() => refresh(user.email)); }} onUploadError={(e) => Swal.fire({ title: 'Error', text: e.message, icon: 'error', background: '#1e2227', color: '#fff' })} content={{ button: "AÑADIR ARCHIVO" }} appearance={{ button: "w-full bg-white/5 text-white/40 text-[14px] font-black py-10 rounded-[2.5rem] hover:bg-white/10 border border-white/5 transition-all uppercase tracking-widest", allowedContent: "hidden" }} />
                 </div>
               </div>
 
