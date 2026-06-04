@@ -817,6 +817,77 @@ export async function getUserRole(userEmail: string) {
   return hasAdmin ? 'admin' : (isBanned ? 'banned' : 'user');
 }
 
+export async function getAllUsersPublic() {
+  noStore();
+  const { data: userProfiles, error } = await supabase.from('user_profiles').select('*');
+  if (error) {
+    console.error("Error obteniendo perfiles:", error.message);
+    return [];
+  }
+  
+  const { data: techs } = await supabase.from('technologies').select('user_email, name, status, notes, resources, streak, todos');
+  const { data: posts } = await supabase.from('community_posts').select('author_email');
+  
+  const techMap = new Map();
+  const xpMap = new Map();
+  const postsMap = new Map();
+  
+  if (posts) {
+    posts.forEach(p => {
+      const email = p.author_email?.toLowerCase();
+      if (!email) return;
+      postsMap.set(email, (postsMap.get(email) || 0) + 1);
+    });
+  }
+  
+  if (techs) {
+    techs.forEach(t => {
+      const email = t.user_email?.toLowerCase();
+      if (!email) return;
+      
+      let xp = xpMap.get(email) || 0;
+      
+      if (t.name === '__DEVTRACK_ACCOUNT__') {
+        xpMap.set(email, xp + (t.streak || 0));
+        return;
+      }
+      
+      techMap.set(email, (techMap.get(email) || 0) + 1);
+      
+      if (t.status === 'Dominado') xp += 1000;
+      else if (t.status === 'Practicando') xp += 300;
+      else xp += 100;
+
+      const notesCount = Array.isArray(t.notes) ? t.notes.length : 0;
+      const resCount = Array.isArray(t.resources) ? t.resources.length : 0;
+      const currentStreak = t.streak || 0;
+      const completedTodos = Array.isArray(t.todos) ? t.todos.filter((x: any) => x.completed).length : 0;
+
+      xp += (notesCount * 150) + (resCount * 50) + (currentStreak * 50) + (completedTodos * 50);
+      xpMap.set(email, xp);
+    });
+  }
+
+  const profiles = userProfiles || [];
+  
+  return profiles.map(p => {
+    const email = p.email?.toLowerCase();
+    const xp = xpMap.get(email) || 0;
+    // Replicamos la misma fórmula de nivel que en el Dashboard
+    const level = Math.floor(Math.sqrt(Math.max(xp, 0) / 100)) + 1;
+    
+    return {
+      username: p.username || email.split('@')[0],
+      email: p.email,
+      avatar_url: p.avatar_url,
+      role: p.role,
+      level: level,
+      techs: techMap.get(email) || 0,
+      posts: postsMap.get(email) || 0
+    };
+  }).sort((a, b) => b.level - a.level); // Ordenamos del nivel más alto al más bajo
+}
+
 export async function exportPlatformDataCSV() {
   const stats = await getAdminPlatformStats();
   let csv = "Email,Role,Tecnologias En Stack,Tecnologias Dominadas,Hacks Publicados,Apuntes Creados,Recursos Guardados\n";
