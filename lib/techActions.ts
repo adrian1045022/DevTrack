@@ -1,6 +1,6 @@
 'use server';
 import { createClient } from '@supabase/supabase-js';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, unstable_noStore as noStore } from 'next/cache';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -75,20 +75,59 @@ export async function recordUserLogin(userEmail: string) {
   }
 }
 
-export async function upsertUserProfile(userEmail: string) {
+export async function getUserProfile(userEmail: string) {
+  if (!userEmail) return null;
+  const emailLower = userEmail.toLowerCase();
+  
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .ilike('email', emailLower)
+    .limit(1);
+    
+  if (error) {
+    console.error("Error obteniendo perfil:", error.message);
+  }
+  return data && data.length > 0 ? data[0] : null;
+}
+
+export async function upsertUserProfile(userEmail: string, username?: string, avatarUrl?: string) {
   if (!userEmail) return;
   const emailLower = userEmail.toLowerCase();
-  // Si Adrian es admin por defecto, aseguramos su rol
   const defaultRole = emailLower === 'adrianperezperez86@gmail.com' ? 'admin' : 'user';
-  
-  // Evitamos usar upsert directamente por si la columna email no es UNIQUE en Supabase
-  const { data: existing } = await supabase.from('user_profiles').select('id').ilike('email', emailLower);
-  if (existing && existing.length > 0) {
-    // Ya existe, no lo sobrescribimos para no quitarle sus permisos actuales
-  } else {
-    await supabase.from('user_profiles').insert([{ email: emailLower, role: defaultRole }]);
+
+  const profileData: any = {
+    email: emailLower,
+    role: defaultRole,
+  };
+
+  if (username && username.trim().length > 0) {
+    profileData.username = username.trim();
   }
+
+  if (avatarUrl && avatarUrl.trim().length > 0) {
+    profileData.avatar_url = avatarUrl.trim();
+  }
+
+  const { data: existing, error: selectError } = await supabase.from('user_profiles').select('id').ilike('email', emailLower);
+  if (selectError) console.error("Error al buscar perfil existente:", selectError);
+
+  if (existing && existing.length > 0) {
+    const { error } = await supabase.from('user_profiles').update(profileData).ilike('email', emailLower);
+    if (error) {
+      console.error("Error al actualizar el perfil:", error);
+      throw new Error(error.message);
+    }
+  } else {
+    const { error } = await supabase.from('user_profiles').insert([profileData]);
+    if (error) {
+      console.error("Error al insertar el perfil:", error);
+      throw new Error(error.message);
+    }
+  }
+
   revalidatePath('/admin');
+  revalidatePath('/dashboard');
 }
 
 export async function addTechnology(formData: FormData, userEmail: string) {
@@ -132,6 +171,15 @@ export async function addNoteToTech(techId: string, title: string, content: stri
   revalidatePath('/dashboard');
 }
 
+export async function editNoteInTech(techId: string, noteId: string, title: string, content: string) {
+  const { data: tech } = await supabase.from('technologies').select('notes').eq('id', techId).single();
+  const notes = Array.isArray(tech?.notes) ? tech.notes : [];
+  const updatedNotes = notes.map((n: any) => n.id === noteId ? { ...n, title, content, updated_at: new Date().toISOString() } : n);
+  
+  await supabase.from('technologies').update({ notes: updatedNotes }).eq('id', techId);
+  revalidatePath('/dashboard');
+}
+
 export async function removeNote(techId: string, noteId: string) {
   const { data: tech } = await supabase.from('technologies').select('notes').eq('id', techId).single();
   const filtered = (tech?.notes as any[] || []).filter(n => n.id !== noteId);
@@ -144,29 +192,76 @@ export async function removeNote(techId: string, noteId: string) {
    ========================================== */
 
 export async function getCommunityPosts() {
+  noStore();
   const { data } = await supabase.from('community_posts').select('*').order('created_at', { ascending: false });
-  return data || [];
+  const posts = data || [];
+  if (posts.length === 0) return posts;
+  
+  const emails = [...new Set(posts.map(p => p.author_email).filter(Boolean))];
+  const { data: profiles } = await supabase.from('user_profiles').select('email, username, avatar_url').in('email', emails);
+  const profileMap = new Map();
+  profiles?.forEach(p => { if (p.email) profileMap.set(p.email.toLowerCase(), p); });
+  
+  return posts.map(p => {
+    const profile = p.author_email ? profileMap.get(p.author_email.toLowerCase()) : null;
+    return { ...p, author: profile?.username || p.author, avatar_url: profile?.avatar_url || null };
+  });
 }
 
 export async function createCommunityPost(title: string, content: string, tech: string, userEmail: string, videoUrl?: string) {
-  await supabase.from('community_posts').insert([{ 
-    title, 
-    content, 
-    tech: tech.toUpperCase(), 
-    author: userEmail.split('@')[0], 
-    author_email: userEmail, 
-    video_url: videoUrl, 
-    likes: [],
-    saved_by: [] // AÑADIDO: Inicializa el array de guardados
+  let authorName = userEmail.split('@')[0];
+  
+  // Obtener el username real si existe
+  const { data: profile } = await supabase.from('user_profiles').select('username').ilike('email', userEmail).limit(1);
+  if (profile && profile.length > 0 && profile[0].username) {
+    authorName = profile[0].username;
+  }
+
+  const { error } = await supabase.from('community_posts').insert([{ 
+    title: title.trim(), 
+    content: content.trim(), 
+    tech: tech.trim().toUpperCase(), 
+    author: authorName, 
+    author_email: userEmail.toLowerCase(), 
+    video_url: videoUrl && videoUrl.trim() !== '' ? videoUrl : null
   }]);
+
+  if (error) throw new Error(error.message);
   revalidatePath('/community');
 }
 
 export async function toggleLike(postId: string, userEmail: string) {
-  const { data: post } = await supabase.from('community_posts').select('likes').eq('id', postId).single();
+  const { data: post, error: fetchErr } = await supabase.from('community_posts').select('likes').eq('id', postId).single();
+  if (fetchErr) throw new Error(fetchErr.message);
   let likes = Array.isArray(post?.likes) ? post.likes : [];
   likes = likes.includes(userEmail) ? likes.filter((e: string) => e !== userEmail) : [...likes, userEmail];
-  await supabase.from('community_posts').update({ likes }).eq('id', postId);
+  const { error: updErr } = await supabase.from('community_posts').update({ likes }).eq('id', postId);
+  if (updErr) throw new Error(updErr.message);
+  revalidatePath('/community');
+}
+
+export async function addCommentToPost(postId: string, userEmail: string, content: string) {
+  const { data: post, error: fetchErr } = await supabase.from('community_posts').select('comments').eq('id', postId).single();
+  if (fetchErr) throw new Error(fetchErr.message);
+  const currentComments = Array.isArray(post?.comments) ? post.comments : [];
+  
+  // Obtener el username real si existe
+  let authorName = userEmail.split('@')[0];
+  const { data: profile } = await supabase.from('user_profiles').select('username').ilike('email', userEmail).limit(1);
+  if (profile && profile.length > 0 && profile[0].username) {
+    authorName = profile[0].username;
+  }
+
+  const newComment = {
+    id: crypto.randomUUID(),
+    author: authorName,
+    author_email: userEmail,
+    content,
+    created_at: new Date().toISOString()
+  };
+  
+  const { error: updErr } = await supabase.from('community_posts').update({ comments: [...currentComments, newComment] }).eq('id', postId);
+  if (updErr) throw new Error(updErr.message);
   revalidatePath('/community');
 }
 
@@ -175,14 +270,16 @@ export async function toggleLike(postId: string, userEmail: string) {
    ========================================== */
 
 export async function toggleSavePost(postId: string, userEmail: string) {
-  const { data: post } = await supabase.from('community_posts').select('saved_by').eq('id', postId).single();
+  const { data: post, error: fetchErr } = await supabase.from('community_posts').select('saved_by').eq('id', postId).single();
+  if (fetchErr) throw new Error(fetchErr.message);
   let savedBy = Array.isArray(post?.saved_by) ? post.saved_by : [];
   
   savedBy = savedBy.includes(userEmail) 
     ? savedBy.filter((e: string) => e !== userEmail) 
     : [...savedBy, userEmail];
 
-  await supabase.from('community_posts').update({ saved_by: savedBy }).eq('id', postId);
+  const { error: updErr } = await supabase.from('community_posts').update({ saved_by: savedBy }).eq('id', postId);
+  if (updErr) throw new Error(updErr.message);
   revalidatePath('/community');
   revalidatePath('/profile');
 }
@@ -196,7 +293,18 @@ export async function getSavedPosts(userEmail: string) {
     .order('created_at', { ascending: false });
     
   if (error) return [];
-  return data || [];
+  const posts = data || [];
+  if (posts.length === 0) return posts;
+  
+  const emails = [...new Set(posts.map(p => p.author_email).filter(Boolean))];
+  const { data: profiles } = await supabase.from('user_profiles').select('email, username, avatar_url').in('email', emails);
+  const profileMap = new Map();
+  profiles?.forEach(p => { if (p.email) profileMap.set(p.email.toLowerCase(), p); });
+  
+  return posts.map(p => {
+    const profile = p.author_email ? profileMap.get(p.author_email.toLowerCase()) : null;
+    return { ...p, author: profile?.username || p.author, avatar_url: profile?.avatar_url || null };
+  });
 }
 
 /* ==========================================
@@ -204,18 +312,28 @@ export async function getSavedPosts(userEmail: string) {
    ========================================== */
 
 export async function getMyPosts(userEmail: string) {
+  noStore();
   if (!userEmail) return [];
   const { data, error } = await supabase
     .from('community_posts')
     .select('*')
-    .eq('author_email', userEmail)
+    .eq('author_email', userEmail.toLowerCase())
     .order('created_at', { ascending: false });
     
   if (error) {
     console.error("Error en getMyPosts:", error.message);
     return [];
   }
-  return data || [];
+  const posts = data || [];
+  if (posts.length === 0) return posts;
+  
+  const { data: profileData } = await supabase.from('user_profiles').select('username, avatar_url').ilike('email', userEmail).limit(1);
+  const profile = profileData && profileData.length > 0 ? profileData[0] : null;
+  return posts.map(p => ({
+    ...p,
+    author: profile?.username || p.author,
+    avatar_url: profile?.avatar_url || null
+  }));
 }
 
 export async function deleteCommunityPost(postId: string, userEmail: string) {
@@ -227,6 +345,38 @@ export async function deleteCommunityPost(postId: string, userEmail: string) {
   revalidatePath('/profile');
 }
 
+export async function updateUserProfileDetails(email: string, details: { bio?: string, github_url?: string, portfolio_url?: string, username?: string, avatar_url?: string }) {
+  if (!email) return;
+  const emailLower = email.toLowerCase();
+  
+  const { data: existing } = await supabase.from('user_profiles').select('id').ilike('email', emailLower);
+  
+  if (existing && existing.length > 0) {
+    const { error } = await supabase
+      .from('user_profiles')
+      .update(details)
+      .ilike('email', emailLower);
+      
+    if (error) {
+      console.error("Error actualizando perfil:", error.message);
+      throw new Error(error.message);
+    }
+  } else {
+    // Fallback: Si el perfil nunca se creó por un error previo, lo creamos aquí
+    const { error } = await supabase
+      .from('user_profiles')
+      .insert([{ email: emailLower, role: 'user', ...details }]);
+      
+    if (error) {
+      console.error("Error creando perfil desde ajustes:", error.message);
+      throw new Error(error.message);
+    }
+  }
+  revalidatePath('/profile');
+  revalidatePath('/dashboard');
+  revalidatePath('/', 'layout'); // Fuerte: Purga toda la caché de rutas al actualizar el perfil
+}
+
 export async function deleteCommunityPostAdmin(postId: string) {
   await supabase.from('community_posts')
     .delete()
@@ -236,6 +386,7 @@ export async function deleteCommunityPostAdmin(postId: string) {
 }
 
 export async function getRelatedHacks(techName: string) {
+  noStore();
   const { data, error } = await supabase
     .from('community_posts')
     .select('*')
@@ -244,7 +395,18 @@ export async function getRelatedHacks(techName: string) {
     .limit(3); // Solo traemos los 3 más recientes para no saturar
 
   if (error) return [];
-  return data || [];
+  const posts = data || [];
+  if (posts.length === 0) return posts;
+  
+  const emails = [...new Set(posts.map(p => p.author_email).filter(Boolean))];
+  const { data: profiles } = await supabase.from('user_profiles').select('email, username, avatar_url').in('email', emails);
+  const profileMap = new Map();
+  profiles?.forEach(p => { if (p.email) profileMap.set(p.email.toLowerCase(), p); });
+  
+  return posts.map(p => {
+    const profile = p.author_email ? profileMap.get(p.author_email.toLowerCase()) : null;
+    return { ...p, author: profile?.username || p.author, avatar_url: profile?.avatar_url || null };
+  });
 }
 
 // lib/techActions.ts
@@ -438,38 +600,57 @@ export async function setAdminRole(email: string, newRole: string) {
 export async function getUserPublicProfile(identifier: string) {
   let emailToSearch = identifier;
   let techs: any[] = [];
+  let userProfileRecord: any = null;
 
   // 1. Si no tiene arroba, intentamos buscar su correo real en la base de datos de usuarios
   if (!identifier.includes('@')) {
-    const { data } = await supabase.from('user_profiles').select('email').ilike('email', `${identifier}@%`).limit(1);
-    if (data && data.length > 0) {
-      emailToSearch = data[0].email;
+    // Primero buscamos coincidencia exacta de username
+    const { data: uData } = await supabase.from('user_profiles').select('*').ilike('username', identifier).limit(1);
+    if (uData && uData.length > 0) {
+      userProfileRecord = uData[0];
+      emailToSearch = uData[0].email;
     } else {
-      // Fallback a los posts si es una cuenta antiquísima
-      const { data: pData } = await supabase.from('community_posts').select('author_email').eq('author', identifier).limit(1);
-      if (pData && pData.length > 0 && pData[0].author_email) emailToSearch = pData[0].author_email;
+      const { data } = await supabase.from('user_profiles').select('*').ilike('email', `${identifier}@%`).limit(1);
+      if (data && data.length > 0) {
+        userProfileRecord = data[0];
+        emailToSearch = data[0].email;
+      } else {
+        // Fallback a los posts si es una cuenta antiquísima
+        const { data: pData } = await supabase.from('community_posts').select('author_email').eq('author', identifier).limit(1);
+        if (pData && pData.length > 0 && pData[0].author_email) emailToSearch = pData[0].author_email;
+      }
+    }
+  } else {
+    // Si tiene arroba, buscar su perfil directamente
+    const { data: uData } = await supabase.from('user_profiles').select('*').ilike('email', identifier).limit(1);
+    if (uData && uData.length > 0) {
+      userProfileRecord = uData[0];
     }
   }
 
-  // 2. Traer el rol y existencia REAL del usuario desde su perfil
-  const { data: profileData } = await supabase.from('user_profiles').select('email, role').ilike('email', emailToSearch).limit(1);
+  // 2. Si todavía no tenemos userProfileRecord, lo buscamos de nuevo por emailToSearch por si se encontró vía posts
+  if (!userProfileRecord) {
+    const { data: profileData } = await supabase.from('user_profiles').select('*').ilike('email', emailToSearch).limit(1);
+    if (profileData && profileData.length > 0) {
+      userProfileRecord = profileData[0];
+    }
+  }
 
   // 3. Traer su stack y sus posts
   const { data: userTechs } = await supabase.from('technologies').select('*').eq('user_email', emailToSearch).order('created_at', { ascending: false });
   techs = userTechs || [];
 
   let postsQuery = supabase.from('community_posts').select('*').order('created_at', { ascending: false });
-  if (emailToSearch.includes('@')) {
-    postsQuery = postsQuery.eq('author_email', emailToSearch);
-  } else {
-    postsQuery = postsQuery.eq('author', identifier);
-  }
+  // Para ser precisos, buscar por email siempre si ya lo descubrimos
+  postsQuery = postsQuery.eq('author_email', emailToSearch.toLowerCase());
   const { data: posts } = await postsQuery;
 
-  // Si no tiene perfil, ni posts, ni techs, entonces realmente no existe
-  if ((!profileData || profileData.length === 0) && techs.length === 0 && (!posts || posts.length === 0)) {
-    // Si el administrador hace clic en un usuario que solo existe en Firebase 
-    // y no tiene actividad en Supabase, devolvemos un perfil básico en lugar de un error.
+  // Excluir el marcador de cuenta
+  const validTechs = techs.filter((t: any) => t.name !== '__DEVTRACK_ACCOUNT__');
+
+  // Condición de existencia: Debe tener un registro en user_profiles, O tener posts, O tener techs válidos.
+  if (!userProfileRecord && validTechs.length === 0 && (!posts || posts.length === 0)) {
+    // Si el usuario es de firebase sin perfil, generamos uno temporal básico
     if (emailToSearch.includes('@')) {
       return {
         email: emailToSearch,
@@ -483,12 +664,14 @@ export async function getUserPublicProfile(identifier: string) {
   }
   
   const userEmail = emailToSearch.includes('@') ? emailToSearch : 'Oculto';
-  const username = emailToSearch.includes('@') ? emailToSearch.split('@')[0] : identifier;
+  // Usar el username guardado en el perfil de forma prioritaria
+  const username = userProfileRecord?.username || (emailToSearch.includes('@') ? emailToSearch.split('@')[0] : identifier);
   
   return {
+    ...userProfileRecord,
     email: userEmail,
     username: username,
-    role: profileData && profileData.length > 0 ? profileData[0].role : 'user',
+    role: userProfileRecord?.role || 'user',
     techs: techs || [],
     posts: posts || []
   };
@@ -510,4 +693,15 @@ export async function getUserRole(userEmail: string) {
   const hasAdmin = data?.some(row => row.role === 'admin');
   const isBanned = data?.some(row => row.role === 'banned');
   return hasAdmin ? 'admin' : (isBanned ? 'banned' : 'user');
+}
+
+export async function exportPlatformDataCSV() {
+  const stats = await getAdminPlatformStats();
+  let csv = "Email,Role,Tecnologias En Stack,Tecnologias Dominadas,Hacks Publicados,Apuntes Creados,Recursos Guardados\n";
+  stats.usersList.forEach(u => {
+    const safeEmail = u.email || 'N/A';
+    const safeRole = u.role || 'user';
+    csv += `${safeEmail},${safeRole},${u.techs},${u.mastered},${u.posts},${u.notes},${u.resources}\n`;
+  });
+  return csv;
 }

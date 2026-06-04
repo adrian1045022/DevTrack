@@ -7,19 +7,19 @@ import {
   addTechnology, getTechnologies, deleteTechnology, 
   addResourceToTech, removeResource, addNoteToTech, removeNote,
   getCommunityPosts, toggleLike, globalSearch, updateTechStatus,
-  recordUserLogin,
-  getUserRole
+  recordUserLogin, getUserRole
 } from '../../lib/techActions';
 import { UploadButton } from "../../lib/uploadthing";
 import Link from 'next/link';
 import NoteRenderer from '../../components/NoteRenderer';
+import confetti from 'canvas-confetti';
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [role, setRole] = useState<string>('user');
   const [techs, setTechs] = useState<any[]>([]);
-  
+
   // ESTADOS DE FILTRADO Y BÚSQUEDA
   const [activeFilter, setActiveFilter] = useState("TODOS"); 
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,6 +32,7 @@ export default function DashboardPage() {
   const [noteContent, setNoteContent] = useState("");
   const [viewingNote, setViewingNote] = useState<any>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [showGamificationModal, setShowGamificationModal] = useState(false);
   const [gamiTab, setGamiTab] = useState('stats');
   const [showXpToast, setShowXpToast] = useState(false);
@@ -193,6 +194,22 @@ export default function DashboardPage() {
     return { xp, level, nextLvlBaseXp, progress, rank, stats, badges, quests, rewards };
   }, [techs]);
 
+  const exportMyProgress = () => {
+    let csv = "Tecnologia,Estado,Apuntes,Recursos,Racha\n";
+    techs.forEach(t => {
+      if (t.name !== '__DEVTRACK_ACCOUNT__') {
+        csv += `${t.name},${t.status},${t.notes?.length || 0},${t.resources?.length || 0},${t.streak || 0}\n`;
+      }
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `progreso_devtrack.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleAddTech = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isAdding) return;
@@ -204,18 +221,27 @@ export default function DashboardPage() {
     try {
       await addTechnology(formData, user.email);
       form.reset();
+      confetti({
+        particleCount: 100, spread: 80, origin: { y: 0.6 },
+        colors: ['#6366f1', '#a855f7', '#ec4899']
+      });
       await refresh(user.email);
+      setShowAddModal(false);
     } catch (error) { console.error(error); } finally { setIsAdding(false); }
   };
 
   if (loading) return <div className="min-h-screen bg-[#1e2227] flex items-center justify-center text-indigo-400 font-black italic uppercase text-2xl animate-pulse">Sincronizando Stack...</div>;
 
   return (
-    <div className="min-h-screen bg-[#1e2227] text-[#e2e8f0] pb-20 font-sans relative selection:bg-indigo-500/30 text-left">
-      <nav className="bg-[#16191d] sticky top-0 z-40 px-8 h-24 flex items-center justify-between border-b border-white/5 shadow-xl">
-        <div className="flex items-center gap-4">
-           <div className="w-12 h-12 bg-indigo-500 rounded-2xl flex items-center justify-center font-black italic text-white text-2xl transform -rotate-3">D</div>
-           <h1 className="text-3xl font-black italic uppercase tracking-tighter text-white">Dev<span className="text-indigo-400">Track</span></h1>
+    <div className="min-h-screen bg-[#0f1117] text-[#e2e8f0] pb-20 font-sans relative selection:bg-indigo-500/30 text-left overflow-x-hidden">
+      {/* Background Gradients for modern look */}
+      <div className="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/20 blur-[120px] rounded-full pointer-events-none"></div>
+      <div className="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-emerald-600/10 blur-[120px] rounded-full pointer-events-none"></div>
+
+      <nav className="bg-[#16191d]/70 backdrop-blur-xl sticky top-0 z-40 px-8 h-24 flex items-center justify-between border-b border-white/5 shadow-2xl">
+        <div className="flex items-center gap-4 group cursor-pointer">
+           <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center font-black italic text-white text-2xl transform group-hover:-rotate-6 transition-transform shadow-lg shadow-indigo-500/30">D</div>
+           <h1 className="text-3xl font-black italic uppercase tracking-tighter text-white">Dev<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Track</span></h1>
         </div>
         
         {/* BUSCADOR GLOBAL */}
@@ -223,7 +249,7 @@ export default function DashboardPage() {
           <input 
             type="text"
             placeholder="BUSCAR EN EL STACK..."
-            className="w-full bg-black/20 border border-white/5 rounded-2xl px-6 py-3 text-[10px] font-black uppercase tracking-widest outline-none focus:border-indigo-500/50 transition-all text-white placeholder:text-white/10 italic"
+            className="w-full bg-[#1e2227]/80 border border-white/10 rounded-2xl px-6 py-3.5 text-[10px] font-black uppercase tracking-widest outline-none focus:border-indigo-500 focus:bg-[#1e2227] transition-all text-white placeholder:text-white/20 italic shadow-inner"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -246,6 +272,14 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-6">
+          {/* RACHA GLOBAL DE FUEGO (GAMIFICATION) */}
+          {gamification.stats.maxStreak > 0 && (
+            <div className="hidden lg:flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 px-4 py-2.5 rounded-2xl shadow-[0_0_15px_rgba(249,115,22,0.15)] animate-in fade-in" title="Racha Máxima Actual">
+               <span className="text-xl animate-pulse">🔥</span>
+               <span className="text-[11px] font-black text-orange-400 uppercase tracking-widest">{gamification.stats.maxStreak} Días</span>
+            </div>
+          )}
+
           {/* SISTEMA DE NIVELES (AHORA CLICABLE) */}
           <button 
             onClick={() => setShowGamificationModal(true)}
@@ -267,19 +301,12 @@ export default function DashboardPage() {
           {role === 'admin' && (
             <Link href="/admin" className="text-[10px] font-black text-amber-400 hover:text-amber-300 transition-all uppercase tracking-[0.3em] border border-amber-500/20 px-6 py-2.5 rounded-xl bg-amber-500/10 shadow-[0_0_10px_rgba(245,158,11,0.2)]">Panel Admin</Link>
           )}
+          <Link href="/profile" className="bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white text-[10px] font-black px-6 py-2.5 rounded-xl transition-all border border-indigo-500/20 uppercase tracking-widest">Mi Perfil</Link>
           <button onClick={() => signOut(auth)} className="bg-white/5 hover:bg-red-500/20 hover:text-red-400 text-[10px] font-black px-6 py-2.5 rounded-xl transition-all border border-white/5 uppercase text-white/40">Salir</button>
         </div>
       </nav>
 
       <main className="max-w-7xl mx-auto p-6 mt-12 text-center">
-        {/* INPUT AÑADIR */}
-        <section className="bg-[#282c34] p-2 rounded-[2.5rem] max-w-2xl mx-auto mb-10 border border-white/5 shadow-2xl">
-          <form onSubmit={handleAddTech} className="flex gap-2">
-            <input name="techName" placeholder={isAdding ? "AÑADIENDO..." : "¿QUÉ VAMOS A APRENDER?"} required disabled={isAdding} className="flex-1 bg-transparent px-8 py-4 outline-none font-black text-lg placeholder:text-white/5 italic uppercase tracking-widest text-center text-white disabled:opacity-50" />
-            <button disabled={isAdding} className="bg-indigo-500 text-white px-12 py-4 rounded-[1.8rem] font-black text-xs uppercase shadow-lg hover:brightness-110 transition-all disabled:opacity-50">Añadir</button>
-          </form>
-        </section>
-
         {/* BARRA DE FILTROS */}
         <div className="flex justify-center gap-3 mb-16">
           {["TODOS", "APRENDIENDO", "PRACTICANDO", "DOMINADO"].map((filter) => (
@@ -299,40 +326,62 @@ export default function DashboardPage() {
 
         {/* GRID DE TARJETAS */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+          
+          {/* AÑADIR NUEVA TECNOLOGÍA CARD */}
+          {activeFilter === "TODOS" && (
+            <div onClick={() => setShowAddModal(true)} className="bg-white/5 border border-dashed border-white/20 rounded-[3rem] p-10 flex flex-col items-center justify-center h-[350px] cursor-pointer hover:bg-white/10 hover:border-indigo-500/50 hover:shadow-[0_20px_60px_rgba(99,102,241,0.15)] transition-all duration-500 group animate-in fade-in zoom-in hover:-translate-y-2">
+              <div className="w-20 h-20 bg-indigo-500/10 rounded-3xl flex items-center justify-center text-indigo-400 text-4xl font-light mb-6 group-hover:scale-110 group-hover:bg-indigo-500 group-hover:text-white transition-all shadow-inner">
+                +
+              </div>
+              <h3 className="text-xl font-black italic uppercase text-white/50 group-hover:text-white tracking-widest transition-colors">Explorar</h3>
+              <p className="text-[10px] font-bold text-white/20 uppercase mt-2 group-hover:text-indigo-300/50">Añadir al Stack</p>
+            </div>
+          )}
+
           {filteredTechs.map((t) => (
-            <div key={t.id} onClick={() => setSelectedTech(t)} className={`bg-[#282c34] p-12 rounded-[4rem] border transition-all flex flex-col h-[350px] relative overflow-hidden group text-left cursor-pointer animate-in fade-in zoom-in duration-300 ${
-              t.status === 'Dominado' ? 'border-emerald-500/30 hover:border-emerald-500/60 shadow-[0_20px_50px_rgba(16,185,129,0.05)]' : 
-              t.status === 'Practicando' ? 'border-amber-500/20 hover:border-amber-500/40' :
-              'border-white/5 hover:border-indigo-500/40'
+            <Link key={t.id} href={`/tecnologias/${t.name.toLowerCase()}`} className={`bg-[#1a1d24]/60 backdrop-blur-md p-10 rounded-[3rem] border transition-all duration-500 flex flex-col h-[350px] relative overflow-hidden group text-left cursor-pointer animate-in fade-in zoom-in shadow-2xl ${
+              t.status === 'Dominado' ? 'border-emerald-500/40 hover:border-emerald-400 hover:shadow-[0_20px_60px_rgba(16,185,129,0.15)] hover:-translate-y-2' : 
+              t.status === 'Practicando' ? 'border-amber-500/30 hover:border-amber-400 hover:shadow-[0_20px_60px_rgba(245,158,11,0.15)] hover:-translate-y-2' :
+              'border-white/10 hover:border-indigo-500/60 hover:shadow-[0_20px_60px_rgba(99,102,241,0.15)] hover:-translate-y-2'
             }`}>
+              
+              {/* Decorative Background Glow */}
+              <div className={`absolute -top-20 -right-20 w-40 h-40 blur-[80px] rounded-full opacity-50 group-hover:opacity-100 transition-opacity duration-500 ${
+                t.status === 'Dominado' ? 'bg-emerald-500' : t.status === 'Practicando' ? 'bg-amber-500' : 'bg-indigo-500'
+              }`}></div>
+
               <div className="flex justify-between items-center mb-8 relative z-10 text-left">
-                <span className={`text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full border italic ${
+                <span className={`text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full border italic backdrop-blur-md ${
                   t.status === 'Dominado' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
                   t.status === 'Practicando' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 
                   'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
                 }`}>{t.status}</span>
-                <button onClick={(e) => { e.stopPropagation(); if(confirm("¿Borrar?")) deleteTechnology(t.id).then(() => refresh(user.email)); }} className="text-white/10 hover:text-red-500 transition-all p-2 text-xl">✕</button>
+                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if(confirm("¿Borrar?")) deleteTechnology(t.id).then(() => refresh(user.email)); }} className="text-white/10 hover:text-red-500 transition-all p-2 text-xl z-20">✕</button>
               </div>
-              <h3 className="text-4xl font-black italic uppercase text-white/90 mb-4 tracking-tighter group-hover:text-indigo-400 transition-colors text-left">{t.name}</h3>
+              <h3 className="text-4xl font-black italic uppercase text-white/90 mb-2 tracking-tighter group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-white group-hover:to-white/50 transition-all text-left relative z-10">{t.name}</h3>
+              <p className="text-[10px] font-black text-indigo-400/50 uppercase tracking-[0.3em] mb-4 opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-2 group-hover:translate-y-0">Entrar al Workspace →</p>
+              
               <div className="mt-auto flex flex-col gap-4 relative z-10 text-left">
                  <div className="flex gap-3 font-black text-[10px] uppercase tracking-widest text-white/20">
-                    <span className="bg-black/20 px-4 py-2 rounded-xl border border-white/5">📄 {t.resources?.length || 0}</span>
-                    <span className="bg-black/20 px-4 py-2 rounded-xl border border-white/5">📝 {t.notes?.length || 0}</span>
+                    <span className="bg-black/30 px-4 py-2 rounded-xl border border-white/5 backdrop-blur-sm">📄 {t.resources?.length || 0}</span>
+                    <span className="bg-black/30 px-4 py-2 rounded-xl border border-white/5 backdrop-blur-sm">📝 {t.notes?.length || 0}</span>
                     {(t.streak || 0) > 0 && (
                       <span className="bg-orange-500/10 text-orange-400 px-4 py-2 rounded-xl border border-orange-500/20 shadow-[0_0_10px_rgba(249,115,22,0.15)] transition-all">🔥 {t.streak}</span>
                     )}
                  </div>
-                 <div className="w-full bg-black/20 h-1.5 rounded-full overflow-hidden border border-white/5">
+                 <div className="w-full bg-black/40 h-1.5 rounded-full overflow-hidden border border-white/5">
                     <div 
-                      className={`h-full transition-all duration-1000 ${
+                      className={`h-full transition-all duration-1000 relative ${
                         t.status === 'Dominado' ? 'bg-emerald-500 shadow-[0_0_15px_#10b981]' : 
-                        t.status === 'Practicando' ? 'bg-amber-500' : 'bg-indigo-500'
+                        t.status === 'Practicando' ? 'bg-amber-500 shadow-[0_0_15px_#f59e0b]' : 'bg-indigo-500 shadow-[0_0_15px_#6366f1]'
                       }`} 
                       style={{ width: t.status === 'Dominado' ? '100%' : t.status === 'Practicando' ? '60%' : '25%' }}
-                    ></div>
+                    >
+                      <div className="absolute inset-0 bg-white/20 w-1/2 skew-x-[-20deg] animate-[shimmer_2s_infinite]"></div>
+                    </div>
                  </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </main>
@@ -438,6 +487,12 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+
+                  <div className="mt-8 flex justify-start">
+                    <button onClick={exportMyProgress} className="bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 hover:text-white transition-all shadow-inner">
+                      ↓ Exportar Datos a CSV
+                    </button>
+                  </div>
         </div>
       )}
 
@@ -653,6 +708,74 @@ export default function DashboardPage() {
 
             </div>
           </div>
+        </div>
+      )}
+
+      {/* MODAL AÑADIR NUEVA TECNOLOGÍA */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-[#0f1115]/95 backdrop-blur-sm" onClick={() => setShowAddModal(false)}>
+          <div className="bg-[#1e2227] w-full max-w-2xl p-10 lg:p-14 rounded-[4rem] border border-white/10 shadow-2xl relative text-left animate-in zoom-in duration-300" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowAddModal(false)} className="absolute top-10 right-10 w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all text-xl font-light text-white/50 hover:text-white">✕</button>
+            
+            <div className="mb-10">
+              <p className="text-[12px] font-black text-indigo-400 tracking-[0.4em] uppercase mb-2 italic">DevTrack Library</p>
+              <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">Explorar Stack</h2>
+            </div>
+
+            <div className="mb-10">
+              <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-4">Sugerencias Populares</p>
+              <div className="flex flex-wrap gap-3">
+                {['React', 'Node.js', 'Python', 'TypeScript', 'Docker', 'AWS', 'Next.js', 'Go'].map((tech) => (
+                  <button 
+                    key={tech}
+                    onClick={() => {
+                      const event = { preventDefault: () => {}, currentTarget: { reset: () => {} } } as any;
+                      const formData = new FormData();
+                      formData.append('techName', tech);
+                      setIsAdding(true);
+                      addTechnology(formData, user.email).then(() => {
+                        refresh(user.email);
+                        setShowAddModal(false);
+                        setIsAdding(false);
+                      });
+                    }}
+                    disabled={isAdding}
+                    className="px-6 py-3 rounded-2xl bg-white/5 border border-white/5 text-xs font-black uppercase italic tracking-widest text-white/70 hover:text-white hover:border-indigo-500 hover:bg-indigo-500/10 hover:shadow-[0_0_15px_rgba(99,102,241,0.2)] transition-all disabled:opacity-50"
+                  >
+                    + {tech}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <form onSubmit={handleAddTech} className="border-t border-white/5 pt-10">
+              <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-4">Añadir Personalizada</p>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <input 
+                  name="techName" 
+                  placeholder={isAdding ? "AÑADIENDO..." : "¿QUÉ QUIERES APRENDER?"} 
+                  required 
+                  disabled={isAdding} 
+                  className="flex-1 bg-black/30 px-8 py-5 rounded-3xl outline-none font-black text-sm placeholder:text-white/20 italic uppercase tracking-widest text-white border border-white/10 focus:border-indigo-500 transition-all shadow-inner disabled:opacity-50" 
+                />
+                <button 
+                  type="submit"
+                  disabled={isAdding} 
+                  className="bg-indigo-500 text-white px-10 py-5 rounded-3xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-500/20 hover:brightness-110 transition-all disabled:opacity-50"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* TOAST DE EXPERIENCIA FLOTANTE */}
+      {showXpToast && (
+        <div className="fixed bottom-10 right-10 z-[100] bg-emerald-500 text-white px-8 py-4 rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.5)] font-black italic uppercase tracking-widest animate-in slide-in-from-bottom-10 fade-in duration-300 flex items-center gap-4 text-lg">
+          <span className="text-2xl animate-spin-slow">🌟</span>
+          <span>¡Misión Cumplida! Has ganado XP</span>
         </div>
       )}
 
