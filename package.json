@@ -14,6 +14,7 @@
     "@uploadthing/react": "^7.3.3",
     "canvas-confetti": "^1.9.4",
     "firebase": "^12.7.0",
+    "firebase-admin": "^13.10.0",
     "mongodb": "^7.0.0",
     "next": "16.1.1",
     "prismjs": "^1.30.0",
@@ -21,6 +22,7 @@
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "sweetalert2": "^11.26.25",
     "uploadthing": "^7.7.4"
   },
   "devDependencies": {

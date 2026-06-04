@@ -1,6 +1,6 @@
 'use client';
 import { auth } from '../../lib/firebase'; 
-import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, setPersistence, browserLocalPersistence, browserSessionPersistence, onAuthStateChanged } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, setPersistence, browserLocalPersistence, browserSessionPersistence, onAuthStateChanged, getAdditionalUserInfo } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -11,18 +11,22 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
 
   // Comprobar si Firebase ya tiene una sesión recordada en este navegador
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
       if (user) {
-        router.replace('/dashboard'); // Si hay sesión, redirigimos sin guardar historial
+        if (pendingRedirect === '/registro') {
+          return; // Esperamos a que el handler decida hacia dónde ir
+        }
+        router.replace('/dashboard'); // Si hay sesión recurrente, redirigimos sin guardar historial
       } else {
         setIsCheckingAuth(false); // Si no hay sesión, mostramos el formulario
       }
     });
     return () => unsub();
-  }, [router]);
+  }, [router, pendingRedirect]);
 
   const handleGoogle = async () => {
     try {
@@ -31,11 +35,21 @@ export default function LoginPage() {
 
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      await signInWithPopup(auth, provider);
-      router.push('/dashboard');
-    } catch (e) { 
-      console.error(e);
-      alert("Error de autorización. Revisa los dominios en Firebase.");
+      setPendingRedirect('/registro');
+
+      const userCredential = await signInWithPopup(auth, provider);
+      const additionalUserInfo = getAdditionalUserInfo(userCredential);
+
+      if (additionalUserInfo?.isNewUser) {
+        router.push('/registro');
+      } else {
+        setPendingRedirect(null);
+        router.push('/dashboard');
+      }
+    } catch (error: any) {
+      console.error(error);
+      setPendingRedirect(null);
+      alert('Error de autorización. Revisa los dominios en Firebase.');
     }
   };
 
@@ -47,8 +61,13 @@ export default function LoginPage() {
 
       await signInWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
-    } catch (e) { 
-      alert("Credenciales incorrectas o usuario no registrado.");
+    } catch (error: any) {
+      setPendingRedirect(null);
+      if (error.code === 'auth/user-not-found') {
+        router.push('/registro');
+      } else {
+        alert('Credenciales incorrectas o usuario no registrado.');
+      }
     }
   };
 

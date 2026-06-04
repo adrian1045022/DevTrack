@@ -1,112 +1,158 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth } from "@/lib/firebase";
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../../lib/firebase';
+import { createUserWithEmailAndPassword, onAuthStateChanged, updateProfile } from 'firebase/auth';
+import { upsertUserProfile, checkUsernameExists } from '../../lib/techActions';
 import Link from 'next/link';
+import { UploadButton } from "../../lib/uploadthing";
+import Swal from 'sweetalert2';
 
 export default function RegistroPage() {
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [username, setUsername] = useState('');
+  const [avatarPreview, setAvatarPreview] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleRegister = async (e: React.FormEvent) => {
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        setEmail(currentUser.email || '');
+      }
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-
-    if (password !== confirmPassword) {
-      setError('Las contraseñas no coinciden.');
+    
+    // Validación de nombre de usuario
+    if (!username.trim() || username.length < 3 || username.length > 30) {
+      setError('El nombre de usuario debe tener entre 3 y 30 caracteres');
       return;
     }
 
+    setIsSubmitting(true);
+    setError('');
+
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      router.push('/dashboard');
-    } catch (e: any) {
-      if (e.code === 'auth/email-already-in-use') {
-        setError('Este correo ya está registrado.');
-      } else if (e.code === 'auth/invalid-email') {
-        setError('El correo electrónico no es válido.');
-      } else if (e.code === 'auth/weak-password') {
-        setError('La contraseña debe tener al menos 6 caracteres.');
-      } else {
-        setError('Ocurrió un error al intentar crear la cuenta. Inténtalo de nuevo.');
+      // 1. COMPROBAR EL NOMBRE DE USUARIO ANTES DE CREAR LA CUENTA
+      const isTaken = await checkUsernameExists(username, user?.email || email);
+      if (isTaken) {
+        Swal.fire({
+          title: 'Nombre no disponible',
+          text: 'El nombre de usuario ya está en uso. Por favor, elige otro.',
+          icon: 'error',
+          background: '#1a1d24',
+          color: '#fff'
+        });
+        setIsSubmitting(false);
+        return; // Detenemos la ejecución aquí
       }
+
+      let currentUser = user;
+      
+      // Si el usuario no viene de Google (no hay sesión aún), creamos su cuenta en Firebase
+      if (!currentUser) {
+        if (!email || !password) {
+          setError('El email y la contraseña son obligatorios para crear la cuenta');
+          setIsSubmitting(false);
+          return;
+        }
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        currentUser = userCredential.user;
+      }
+
+      // NOTA: Si usas UploadThing o Firebase Storage para las imágenes,
+      // deberías subir 'avatarFile' aquí a tu Storage y obtener la URL final. 
+      // Por ahora usaremos la preview local como placeholder en la base de datos.
+      let finalAvatarUrl = currentUser.photoURL || '';
+      if (avatarPreview) {
+        finalAvatarUrl = avatarPreview;
+      }
+
+      // Actualizamos el perfil básico en Firebase Auth
+      await updateProfile(currentUser, {
+        displayName: username,
+        photoURL: finalAvatarUrl
+      });
+
+      // Guardamos el perfil permanentemente en Supabase usando tu action
+      const result = await upsertUserProfile(currentUser.email, username, finalAvatarUrl);
+      if (result && result.error) {
+        throw new Error(result.error);
+      }
+
+      router.push('/dashboard');
+    } catch (err: any) {
+      console.error(err);
+      Swal.fire({
+        title: 'Error',
+        text: err.message || 'Hubo un error al crear la cuenta o perfil.',
+        icon: 'error',
+        background: '#1a1d24',
+        color: '#fff'
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  if (loading) return null;
+
   return (
-    <main className="fixed inset-0 flex items-center justify-center bg-[#050505] p-4 overflow-hidden selection:bg-blue-500/30">
-      
-      {/* Glows de fondo para profundidad visual */}
-      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-600/10 blur-[120px] rounded-full pointer-events-none" />
+    <main className="min-h-screen bg-[#050505] flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white/[0.02] border border-white/10 p-10 rounded-[3.5rem] shadow-2xl backdrop-blur-3xl">
+        <h1 className="text-3xl font-black text-white text-center mb-2 uppercase tracking-tighter italic">
+          Completar <span className="text-blue-500">Perfil</span>
+        </h1>
+        <p className="text-center text-slate-400 text-sm mb-8">Personaliza tu cuenta en DevTrack.</p>
 
-      <div className="relative z-10 w-full max-w-[420px]">
-        <div className="bg-white/[0.02] border border-white/10 backdrop-blur-3xl p-10 md:p-12 rounded-[3.5rem] shadow-2xl">
-          
-          <header className="text-center mb-10">
-            <div className="w-16 h-16 bg-blue-600 rounded-[1.5rem] flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/20">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <h1 className="text-4xl font-black text-white italic tracking-tighter uppercase">
-              Dev<span className="text-blue-500">Track</span>
-            </h1>
-            <p className="text-slate-500 text-[10px] font-bold tracking-[0.4em] uppercase mt-3">Crear Cuenta</p>
-          </header>
+        {error && (
+          <div className="bg-red-500/20 text-red-400 p-3 rounded-xl text-sm font-bold mb-6 border border-red-500/20 text-center">
+            {error}
+          </div>
+        )}
 
-          <form onSubmit={handleRegister} className="space-y-4">
-            <input 
-              type="email" 
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-white placeholder:text-slate-600 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm"
-              required
-            />
-            <input 
-              type="password" 
-              placeholder="Contraseña"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-white placeholder:text-slate-600 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm"
-              required
-            />
-            <input 
-              type="password" 
-              placeholder="Confirmar Contraseña"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-white placeholder:text-slate-600 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm"
-              required
-            />
-            
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-                <p className="text-[11px] text-red-400 font-semibold text-center tracking-wide leading-relaxed">{error}</p>
-              </div>
-            )}
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {!user && (
+            <>
+              <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all" />
+              <input type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all" />
+            </>
+          )}
 
-            <button 
-              type="submit" 
-              className="w-full h-14 mt-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black transition-all active:scale-95 shadow-lg shadow-blue-600/20 uppercase text-[11px] tracking-widest"
-            >
-              Registrarse
-            </button>
-          </form>
+          <input type="text" placeholder="Nombre de usuario (ej: CodeMaster)" value={username} onChange={(e) => setUsername(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all" />
 
-          <footer className="mt-10 pt-8 border-t border-white/5 text-center">
-            <div className="flex flex-col items-center gap-4">
-              <Link href="/login" className="text-[10px] font-bold text-slate-500 hover:text-white transition-all uppercase tracking-widest">
-                ¿Ya tienes cuenta? <span className="text-blue-500">Inicia sesión</span>
-              </Link>
-            </div>
-          </footer>
-        </div>
+          <div className="flex flex-col items-center gap-4 py-4">
+             {avatarPreview ? (
+               <img src={avatarPreview} alt="Avatar Preview" className="w-24 h-24 rounded-full object-cover border-4 border-blue-500 shadow-xl" />
+             ) : (
+               <div className="w-24 h-24 rounded-full bg-white/5 border-2 border-dashed border-white/20 flex items-center justify-center text-white/30 text-xs font-bold uppercase tracking-widest">Avatar</div>
+             )}
+          <UploadButton 
+            endpoint="techAttachment" 
+            onClientUploadComplete={(res) => { 
+              if (res) { setAvatarPreview(res[0].url); setError(''); }
+            }} 
+            onUploadError={(e) => setError(e.message)} 
+            appearance={{ button: "text-xs bg-blue-500/10 text-blue-400 font-bold px-4 py-3 rounded-xl cursor-pointer hover:bg-blue-500/20 transition-all border border-blue-500/20 w-auto", allowedContent: "hidden" }} 
+            content={{ button: "Subir Imagen (Opcional)" }} 
+          />
+          </div>
+
+          <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 mt-4">
+            {isSubmitting ? 'Guardando...' : 'Guardar y Continuar'}
+          </button>
+        </form>
       </div>
     </main>
   );
