@@ -1,5 +1,20 @@
 'use client';
 import { useEffect, useState, useMemo } from 'react';
+
+function PostMedia({ url }: { url: string }) {
+  const [useVideo, setUseVideo] = useState(false);
+  if (useVideo) {
+    return <video src={url} controls className="w-full max-h-[400px] object-cover" />;
+  }
+  return (
+    <img
+      src={url}
+      alt="media"
+      onError={() => setUseVideo(true)}
+      className="w-full max-h-[400px] object-cover"
+    />
+  );
+}
 import { auth } from '../../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
@@ -24,6 +39,7 @@ export default function CommunityPage() {
   const [content, setContent] = useState('');
   const [tech, setTech] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
+  const [mediaIsImage, setMediaIsImage] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [postError, setPostError] = useState('');
 
@@ -113,7 +129,7 @@ export default function CommunityPage() {
     setIsPosting(true);
     try {
       await createCommunityPost(title, content, tech, user.email, videoUrl);
-      setTitle(''); setContent(''); setTech(''); setVideoUrl('');
+      setTitle(''); setContent(''); setTech(''); setVideoUrl(''); setMediaIsImage(false);
       const updatedPosts = await getCommunityPosts();
       setPosts(updatedPosts || []);
       showToast("¡Hack publicado con éxito!", "bg-indigo-500");
@@ -324,8 +340,11 @@ export default function CommunityPage() {
 
             {videoUrl && (
               <div className="relative mt-2 mb-4 rounded-2xl overflow-hidden border border-white/10 bg-white/5">
-                <button onClick={() => setVideoUrl('')} className="absolute top-2 right-2 bg-black/70 p-2 rounded-full hover:bg-black text-white z-10">✕</button>
-                <video src={videoUrl} controls className="w-full max-h-64 object-cover" />
+                <button onClick={() => { setVideoUrl(''); setMediaIsImage(false); }} className="absolute top-2 right-2 bg-black/70 p-2 rounded-full hover:bg-black text-white z-10">✕</button>
+                {mediaIsImage
+                  ? <img src={videoUrl} alt="preview" className="w-full max-h-64 object-cover" />
+                  : <video src={videoUrl} controls className="w-full max-h-64 object-cover" />
+                }
               </div>
             )}
             
@@ -336,10 +355,15 @@ export default function CommunityPage() {
                 <div className="cursor-pointer hover:bg-indigo-500/10 p-2 rounded-full transition-colors relative">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                   <div className="absolute inset-0 opacity-0 cursor-pointer overflow-hidden z-10 w-full h-full">
-                    <UploadButton 
-                       endpoint="communityVideo" 
-                       onClientUploadComplete={(res) => { if(res) setVideoUrl(res[0].url) }}
-                       appearance={{ button: "w-full h-full cursor-pointer", allowedContent: "hidden" }} 
+                    <UploadButton
+                       endpoint="communityMedia"
+                       onClientUploadComplete={(res) => {
+                         if (res) {
+                           setVideoUrl(res[0].ufsUrl);
+                           setMediaIsImage(res[0].type.startsWith('image/'));
+                         }
+                       }}
+                       appearance={{ button: "w-full h-full cursor-pointer", allowedContent: "hidden" }}
                        content={{ button: "" }}
                     />
                   </div>
@@ -396,7 +420,7 @@ export default function CommunityPage() {
 
                   {post.video_url && (
                     <div className="mt-4 rounded-2xl overflow-hidden border border-white/10 bg-black shadow-lg">
-                      <video src={post.video_url} controls className="w-full max-h-[400px] object-cover" />
+                      <PostMedia url={post.video_url} />
                     </div>
                   )}
 
