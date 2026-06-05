@@ -120,7 +120,6 @@ export default function AdminPage() {
     }
   };
 
-  // FUNCIÓN PARA EXPORTAR USUARIOS A EXCEL (CSV)
   const exportUsersCSV = () => {
     if (!stats || !stats.usersList) return;
     const headers = ["Email", "Username", "Rol", "Proveedor", "Techs", "Dominadas", "Apuntes", "Recursos", "Posts"];

@@ -6,10 +6,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   getCommunityPosts, createCommunityPost, toggleLike, toggleSavePost,
-  addCommentToPost, getUserRole
+  addCommentToPost, getUserRole, getUserProfile,
+  deleteCommunityPost, deleteCommunityPostAdmin
 } from '../../lib/techActions';
 import { UploadButton } from "../../lib/uploadthing";
-import confetti from 'canvas-confetti';
 import { createClient } from '@supabase/supabase-js';
 
 export default function CommunityPage() {
@@ -20,7 +20,6 @@ export default function CommunityPage() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
 
-  // Estados para el compositor (Nuevo "Tweet")
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [tech, setTech] = useState('');
@@ -28,12 +27,11 @@ export default function CommunityPage() {
   const [isPosting, setIsPosting] = useState(false);
   const [postError, setPostError] = useState('');
 
-  // Estados para comentarios y filtros
   const [filterTech, setFilterTech] = useState<string | null>(null);
   const [selectedPost, setSelectedPost] = useState<any>(null);
   const [commentContent, setCommentContent] = useState('');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  // Notificaciones Toast Visuales
   const [toast, setToast] = useState<{show: boolean, msg: string, color: string}>({show: false, msg: '', color: 'bg-indigo-500'});
   const showToast = (msg: string, color: string = 'bg-indigo-500') => {
     setToast({ show: true, msg, color });
@@ -47,9 +45,7 @@ export default function CommunityPage() {
       } else {
         setUser(currentUser);
         setRole(await getUserRole(currentUser.email!));
-        
-        // Cargar el perfil del usuario para obtener su avatar
-        const { getUserProfile } = await import('../../lib/techActions');
+
         if (currentUser.email) {
           const profileData = await getUserProfile(currentUser.email);
           setUserProfile(profileData);
@@ -66,7 +62,6 @@ export default function CommunityPage() {
   useEffect(() => {
     if (!user) return;
 
-    // Suscripción en Tiempo Real (WebSockets)
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
@@ -88,6 +83,13 @@ export default function CommunityPage() {
 
     return () => { supabaseClient.removeChannel(channel); };
   }, [user]);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    const close = () => setOpenMenuId(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [openMenuId]);
 
   const handlePost = async () => {
     if (!title.trim() || !content.trim() || !tech.trim() || !user) {
@@ -112,7 +114,6 @@ export default function CommunityPage() {
     try {
       await createCommunityPost(title, content, tech, user.email, videoUrl);
       setTitle(''); setContent(''); setTech(''); setVideoUrl('');
-      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#6366f1', '#10b981'] });
       const updatedPosts = await getCommunityPosts();
       setPosts(updatedPosts || []);
       showToast("¡Hack publicado con éxito!", "bg-indigo-500");
@@ -123,6 +124,17 @@ export default function CommunityPage() {
     } finally {
       setIsPosting(false);
     }
+  };
+
+  const handleDeletePost = async (postId: string, authorEmail: string) => {
+    setOpenMenuId(null);
+    if (role === 'admin') {
+      await deleteCommunityPostAdmin(postId);
+    } else {
+      await deleteCommunityPost(postId, authorEmail);
+    }
+    setPosts(prev => prev.filter(p => p.id !== postId));
+    showToast("Publicación eliminada", "bg-red-500");
   };
 
   const handleLike = async (postId: string) => {
@@ -146,7 +158,6 @@ export default function CommunityPage() {
     const content = commentContent.trim();
     setCommentContent('');
     try {
-      // Actualización optimista: lo mostramos de inmediato en pantalla
       const tempComment = {
         id: Date.now().toString(),
         author: userProfile?.username || user.email.split('@')[0],
@@ -172,25 +183,23 @@ export default function CommunityPage() {
       if (t) counts[t] = (counts[t] || 0) + 1;
     });
     return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1]) // Ordenar de más a menos menciones
-      .slice(0, 4) // Coger el Top 4
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
       .map(([name, count]) => ({ name, count }));
   }, [posts]);
 
   const suggestedUsers = useMemo(() => {
     const usersMap: Record<string, any> = {};
     posts.forEach(p => {
-      // Solo sugerimos personas que no sean el usuario actual
       if (p.author_email && p.author_email !== user?.email) {
         if (!usersMap[p.author_email]) {
           usersMap[p.author_email] = { name: p.author, email: p.author_email };
         }
       }
     });
-    return Object.values(usersMap).slice(0, 3); // Coger 3 usuarios únicos
+    return Object.values(usersMap).slice(0, 3);
   }, [posts, user?.email]);
 
-  // Filtrar los posts si el usuario ha hecho clic en una tendencia
   const filteredPosts = useMemo(() => {
     if (!filterTech) return posts;
     return posts.filter(p => p.tech?.toUpperCase() === filterTech.toUpperCase());
@@ -364,18 +373,18 @@ export default function CommunityPage() {
             const isSaved = post.saved_by?.includes(user?.email);
             const initials = post.author?.substring(0, 2).toUpperCase() || 'U';
 
+            const canDelete = user?.email === post.author_email || role === 'admin';
             return (
               <article key={post.id} onClick={() => setSelectedPost(post)} className="relative p-6 border-b border-white/5 bg-[#0f1117]/40 hover:bg-[#161922] transition-all duration-300 flex gap-5 cursor-pointer group before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-gradient-to-b before:from-indigo-500 before:to-purple-500 before:opacity-0 hover:before:opacity-100 before:transition-opacity">
                 <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/20 rounded-full shrink-0 flex items-center justify-center font-black text-indigo-400 text-sm group-hover:scale-105 transition-transform shadow-inner overflow-hidden">
                   {post.avatar_url ? <img src={post.avatar_url} alt="avatar" className="w-full h-full object-cover" /> : initials}
                 </div>
                 <div className="flex-1 min-w-0">
-                  {/* Cabecera del tweet */}
                   <div className="flex items-center gap-2 mb-1">
                     <Link href={`/u/${post.author_email?.split('@')[0] || post.author}`} onClick={(e) => e.stopPropagation()} className="font-black text-white hover:underline truncate">{post.author}</Link>
                     <Link href={`/u/${post.author_email?.split('@')[0] || post.author}`} onClick={(e) => e.stopPropagation()} className="text-white/40 text-sm truncate hover:underline">@{post.author.toLowerCase().replace(/\s/g, '')}</Link>
                     <span className="text-white/40 text-sm">·</span>
-                    <span className="text-white/40 text-sm whitespace-nowrap hover:underline">{new Date(post.created_at).toLocaleDateString()}</span>
+                    <span className="text-white/40 text-sm whitespace-nowrap">{new Date(post.created_at).toLocaleDateString()}</span>
                   </div>
                   
                   <div className="mb-3">
@@ -391,24 +400,46 @@ export default function CommunityPage() {
                     </div>
                   )}
 
-                  {/* Botonera de acciones */}
                   <div className="flex items-center justify-between mt-3 text-white/40 max-w-md pr-10">
                     <button onClick={(e) => { e.stopPropagation(); setSelectedPost(post); }} className="flex items-center gap-2 hover:text-indigo-400 group transition-colors">
                       <div className="p-2 rounded-full group-hover:bg-indigo-400/10 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg></div>
                       <span className="text-xs">{post.comments?.length || 0}</span>
                     </button>
-                    
                     <button onClick={(e) => { e.stopPropagation(); handleLike(post.id); }} className={`flex items-center gap-2 group transition-colors ${isLiked ? 'text-pink-500' : 'hover:text-pink-500'}`}>
                       <div className={`p-2 rounded-full transition-colors ${isLiked ? 'bg-pink-500/10' : 'group-hover:bg-pink-500/10'}`}><svg className="w-5 h-5" fill={isLiked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg></div>
                       <span className="text-xs">{post.likes?.length || 0}</span>
                     </button>
-                    
                     <button onClick={(e) => { e.stopPropagation(); handleSave(post.id); }} className={`flex items-center gap-2 group transition-colors ${isSaved ? 'text-emerald-500' : 'hover:text-emerald-500'}`}>
                       <div className={`p-2 rounded-full transition-colors ${isSaved ? 'bg-emerald-500/10' : 'group-hover:bg-emerald-500/10'}`}><svg className="w-5 h-5" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg></div>
                       <span className="text-xs">{post.saved_by?.length || 0}</span>
                     </button>
                   </div>
                 </div>
+
+                {/* Menú de 3 puntos — solo visible si puede eliminar */}
+                {canDelete && (
+                  <div className="absolute top-4 right-4" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => setOpenMenuId(openMenuId === post.id ? null : post.id)}
+                      className="w-8 h-8 flex items-center justify-center rounded-full text-white/20 hover:text-white/70 hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+                      </svg>
+                    </button>
+                    {openMenuId === post.id && (
+                      <div className="absolute right-0 top-9 bg-[#1a1d24] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 min-w-[170px]">
+                        <button
+                          onClick={() => handleDeletePost(post.id, post.author_email)}
+                          className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2.5"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                          Eliminar publicación
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </article>
             )
           })}

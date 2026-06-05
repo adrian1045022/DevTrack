@@ -22,8 +22,7 @@ export default function DashboardPage() {
   const [role, setRole] = useState<string>('user');
   const [techs, setTechs] = useState<any[]>([]);
 
-  // ESTADOS DE FILTRADO Y BÚSQUEDA
-  const [activeFilter, setActiveFilter] = useState("TODOS"); 
+  const [activeFilter, setActiveFilter] = useState("TODOS");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{myTechs: any[], communityPosts: any[]}>({myTechs: [], communityPosts: []});
   
@@ -38,10 +37,8 @@ export default function DashboardPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showGamificationModal, setShowGamificationModal] = useState(false);
   const [gamiTab, setGamiTab] = useState('stats');
-  const [showXpToast, setShowXpToast] = useState(false);
   const router = useRouter();
 
-  // Función para refrescar datos desde Supabase
   const refresh = useCallback(async (email: string) => {
     if (!email) return;
     const data = await getTechnologies(email);
@@ -52,7 +49,6 @@ export default function DashboardPage() {
     }
   }, [selectedTech]);
 
-  // Manejar cambio de Status (Aprendiendo, Practicando, Dominado)
   const handleStatusChange = async (techId: string, newStatus: string) => {
     const success = await updateTechStatus(techId, newStatus);
     if (success && user?.email) {
@@ -60,15 +56,12 @@ export default function DashboardPage() {
     }
   };
 
-  // Lógica de filtrado para el Grid principal
   const filteredTechs = useMemo(() => techs.filter(t => {
-    if (t.name === '__DEVTRACK_ACCOUNT__') return false; // Ocultar el marcador de cuenta
+    if (t.name === '__DEVTRACK_ACCOUNT__') return false;
     if (activeFilter === "TODOS") return true;
-    // Comparamos el status de la DB con el filtro activo
     return t.status.toUpperCase() === activeFilter;
   }), [techs, activeFilter]);
 
-  // Tecla Escape para cerrar todo
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -82,7 +75,6 @@ export default function DashboardPage() {
     return () => window.removeEventListener('keydown', handleEsc);
   }, []);
 
-  // Buscador Global con Debounce
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {
       if (searchQuery.length > 1 && user?.email) {
@@ -95,7 +87,6 @@ export default function DashboardPage() {
     return () => clearTimeout(delayDebounce);
   }, [searchQuery, user?.email]);
 
-  // Cargar Hacks relacionados al abrir una tecnología
   useEffect(() => {
     if (selectedTech) {
       getCommunityPosts().then((allPosts) => {
@@ -128,14 +119,13 @@ export default function DashboardPage() {
     return () => unsub();
   }, [router]);
 
-  // CÁLCULO DE GAMIFICACIÓN MEJORADO (XP, NIVELES, RANGOS Y LOGROS)
   const gamification = useMemo(() => {
     let xp = 0;
     const stats = { learning: 0, practicing: 0, mastered: 0, notes: 0, resources: 0, maxStreak: 0 };
     
     techs.forEach(t => {
       if (t.name === '__DEVTRACK_ACCOUNT__') {
-        xp += t.streak || 0; // Sumar la XP legada de tecnologías borradas
+        xp += t.streak || 0;
         return;
       }
 
@@ -163,7 +153,6 @@ export default function DashboardPage() {
     const nextLvlBaseXp = Math.pow(level, 2) * 100;
     const progress = ((xp - currentLvlBaseXp) / (nextLvlBaseXp - currentLvlBaseXp)) * 100;
 
-    // Determinar Rango
     let rank = { name: "Hierro", color: "text-slate-400", bg: "bg-slate-400", border: "border-slate-400/20" };
     if (level >= 5 && level < 10) rank = { name: "Bronce", color: "text-orange-400", bg: "bg-orange-400", border: "border-orange-400/20" };
     else if (level >= 10 && level < 15) rank = { name: "Plata", color: "text-gray-300", bg: "bg-gray-300", border: "border-gray-300/20" };
@@ -174,19 +163,16 @@ export default function DashboardPage() {
 
     // Evaluar Logros
     
-    // Daily Quests (Misiones Diarias Generadas Dinámicamente)
     const today = new Date().toLocaleDateString();
-    // Deterministic random based on today's date and user email length to keep quests consistent for the day
     const seed = today.split('/').join('') + techs.length;
-    
+
     const quests = [
       { id: 1, title: 'El Coleccionista', desc: 'Guarda al menos 3 recursos en total.', target: 3, current: stats.resources, xp: 150, icon: '💾' },
       { id: 2, title: 'Erudito Constante', desc: 'Alcanza una racha de fuego de 3 días.', target: 3, current: stats.maxStreak, xp: 300, icon: '🔥' },
       { id: 3, title: 'Maestro del Código', desc: 'Domina al menos 1 tecnología.', target: 1, current: stats.mastered, xp: 500, icon: '🏆' },
       { id: 4, title: 'Lector Empedernido', desc: 'Escribe 5 apuntes en total.', target: 5, current: stats.notes, xp: 200, icon: '📝' }
-    ].sort((a, b) => (a.id * Number(seed)) % 5 - (b.id * Number(seed)) % 5).slice(0, 3); // Pick 3 daily
+    ].sort((a, b) => (a.id * Number(seed)) % 5 - (b.id * Number(seed)) % 5).slice(0, 3);
 
-    // Rewards (Unlockables)
     const rewards = [
       { level: 5, name: 'Borde de Bronce', type: 'Marco', icon: '🥉' },
       { level: 10, name: 'Título: El Coder', type: 'Título', icon: '🏷️' },
@@ -253,7 +239,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#0f1117] text-[#e2e8f0] pb-20 font-sans relative selection:bg-indigo-500/30 text-left overflow-x-hidden">
-      {/* Background Gradients for modern look */}
       <div className="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/20 blur-[120px] rounded-full pointer-events-none"></div>
       <div className="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-emerald-600/10 blur-[120px] rounded-full pointer-events-none"></div>
 
@@ -263,7 +248,7 @@ export default function DashboardPage() {
            <h1 className="text-3xl font-black italic uppercase tracking-tighter text-white">Dev<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Track</span></h1>
         </div>
         
-        {/* BUSCADOR GLOBAL */}
+
         <div className="hidden md:block relative w-96 text-left">
           <input 
             type="text"
@@ -273,7 +258,7 @@ export default function DashboardPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           
-          {/* RESULTADOS BUSCADOR */}
+
           {(searchResults.myTechs.length > 0 || searchResults.communityPosts.length > 0) && (
             <div className="absolute top-14 left-0 w-[450px] bg-[#282c34] border border-white/10 rounded-[2.5rem] shadow-2xl p-8 z-[100] text-left animate-in fade-in slide-in-from-top-2">
               {searchResults.myTechs.length > 0 && (
@@ -291,7 +276,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-6">
-          {/* RACHA GLOBAL DE FUEGO (GAMIFICATION) */}
+
           {gamification.stats.maxStreak > 0 && (
             <div className="hidden lg:flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 px-4 py-2.5 rounded-2xl shadow-[0_0_15px_rgba(249,115,22,0.15)] animate-in fade-in" title="Racha Máxima Actual">
                <span className="text-xl animate-pulse">🔥</span>
@@ -299,7 +284,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* SISTEMA DE NIVELES (AHORA CLICABLE) */}
+
           <button 
             onClick={() => setShowGamificationModal(true)}
             className={`hidden lg:flex items-center gap-4 bg-black/20 px-5 py-2.5 rounded-2xl border hover:border-white/20 transition-all shadow-inner cursor-pointer ${gamification.rank.border}`}
@@ -326,7 +311,7 @@ export default function DashboardPage() {
       </nav>
 
       <main className="max-w-7xl mx-auto p-6 mt-12 text-center">
-        {/* BARRA DE FILTROS */}
+
         <div className="flex justify-center gap-3 mb-16">
           {["TODOS", "APRENDIENDO", "PRACTICANDO", "DOMINADO"].map((filter) => (
             <button
@@ -343,10 +328,10 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* GRID DE TARJETAS */}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
           
-          {/* AÑADIR NUEVA TECNOLOGÍA CARD */}
+
           {activeFilter === "TODOS" && (
             <div onClick={() => setShowAddModal(true)} className="bg-white/5 border border-dashed border-white/20 rounded-[3rem] p-10 flex flex-col items-center justify-center h-[350px] cursor-pointer hover:bg-white/10 hover:border-indigo-500/50 hover:shadow-[0_20px_60px_rgba(99,102,241,0.15)] transition-all duration-500 group animate-in fade-in zoom-in hover:-translate-y-2">
               <div className="w-20 h-20 bg-indigo-500/10 rounded-3xl flex items-center justify-center text-indigo-400 text-4xl font-light mb-6 group-hover:scale-110 group-hover:bg-indigo-500 group-hover:text-white transition-all shadow-inner">
@@ -364,7 +349,7 @@ export default function DashboardPage() {
               'border-white/10 hover:border-indigo-500/60 hover:shadow-[0_20px_60px_rgba(99,102,241,0.15)] hover:-translate-y-2'
             }`}>
               
-              {/* Decorative Background Glow */}
+
               <div className={`absolute -top-20 -right-20 w-40 h-40 blur-[80px] rounded-full opacity-50 group-hover:opacity-100 transition-opacity duration-500 ${
                 t.status === 'Dominado' ? 'bg-emerald-500' : t.status === 'Practicando' ? 'bg-amber-500' : 'bg-indigo-500'
               }`}></div>
@@ -458,7 +443,7 @@ export default function DashboardPage() {
             <div className="flex-1 overflow-y-auto p-12 scrollbar-hide text-left">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-20">
                 <div className="space-y-8">
-                  {/* OBJETIVOS / ROADMAP */}
+
                   <div className="bg-[#1a1d23] border border-white/5 rounded-3xl p-8 shadow-xl">
                     <div className="flex items-center justify-between mb-6">
                       <h4 className="text-[12px] font-black uppercase text-emerald-400 italic tracking-[0.2em]">Objetivos / Roadmap</h4>
@@ -497,7 +482,7 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="space-y-8 border-l border-white/5 pl-12 text-left">
-                  {/* EXPLORADOR DE CONOCIMIENTO */}
+
                   <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-3xl p-8 shadow-xl">
                     <h4 className="text-[12px] font-black uppercase text-indigo-400 italic tracking-[0.2em] mb-6">Explorador Rápido</h4>
                     <div className="grid grid-cols-2 gap-3">
@@ -524,7 +509,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* HACKS RELACIONADOS INTEGRADOS */}
+
               {relatedHacks.length > 0 && (
                 <div className="mt-16 border-t border-white/5 pt-16 text-left">
                   <div className="flex items-center gap-4 mb-12">
@@ -600,7 +585,7 @@ export default function DashboardPage() {
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 lg:p-8 bg-[#0f1115]/95 backdrop-blur-sm" onClick={() => setShowGamificationModal(false)}>
           <div className="relative w-full max-w-5xl h-[85vh] bg-[#1e2227] overflow-hidden rounded-[3rem] border border-white/10 flex flex-col shadow-2xl animate-in zoom-in duration-300" onClick={e => e.stopPropagation()}>
             
-            {/* HEADER DEL PERFIL */}
+
             <div className="p-8 lg:p-10 border-b border-white/5 relative overflow-hidden flex items-center justify-between shrink-0">
               <div className={`absolute inset-0 opacity-10 bg-gradient-to-r from-transparent via-current to-transparent ${gamification.rank.color}`}></div>
               <div className="relative z-10 flex items-center gap-8">
@@ -621,7 +606,7 @@ export default function DashboardPage() {
               <button onClick={() => setShowGamificationModal(false)} className="relative z-10 w-14 h-14 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all text-2xl font-light text-white/50 hover:text-white">✕</button>
             </div>
 
-            {/* NAVEGACIÓN DE TABS */}
+
             <div className="flex px-10 border-b border-white/5 shrink-0 bg-[#16191d]">
                {['stats', 'quests', 'rewards'].map((tab) => (
                  <button 
@@ -634,10 +619,10 @@ export default function DashboardPage() {
                ))}
             </div>
             
-            {/* CONTENIDO DESLIZABLE */}
+
             <div className="p-10 lg:p-12 flex-1 overflow-y-auto scrollbar-hide">
               
-              {/* TAB: ESTADÍSTICAS */}
+
               {gamiTab === 'stats' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 animate-in fade-in slide-in-from-bottom-4">
                   <div className="space-y-4">
@@ -690,7 +675,7 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* TAB: MISIONES DIARIAS */}
+
               {gamiTab === 'quests' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 max-w-4xl mx-auto">
                   <div className="bg-indigo-500/10 border border-indigo-500/20 p-6 rounded-3xl mb-10 flex items-center justify-between">
@@ -734,7 +719,7 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* TAB: RECOMPENSAS */}
+
               {gamiTab === 'rewards' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 max-w-4xl mx-auto">
                   <div className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-3xl mb-10 flex items-center justify-between">
@@ -751,7 +736,7 @@ export default function DashboardPage() {
                       
                       return (
                         <div key={r.level} className="relative pl-12 flex items-center gap-8">
-                          {/* Nodo del Timeline */}
+
                           <div className={`absolute -left-[25px] w-12 h-12 rounded-full border-4 flex items-center justify-center text-sm font-black transition-all ${isUnlocked ? 'bg-amber-500 border-[#1e2227] text-[#1e2227] shadow-[0_0_20px_rgba(245,158,11,0.5)]' : 'bg-[#282c34] border-[#1e2227] text-white/30'}`}>
                             {r.level}
                           </div>
@@ -842,21 +827,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* TOAST DE EXPERIENCIA FLOTANTE */}
-      {showXpToast && (
-        <div className="fixed bottom-10 right-10 z-[100] bg-emerald-500 text-white px-8 py-4 rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.5)] font-black italic uppercase tracking-widest animate-in slide-in-from-bottom-10 fade-in duration-300 flex items-center gap-4 text-lg">
-          <span className="text-2xl animate-spin-slow">🌟</span>
-          <span>¡Misión Cumplida! Has ganado XP</span>
-        </div>
-      )}
-
-      {/* TOAST DE EXPERIENCIA FLOTANTE */}
-      {showXpToast && (
-        <div className="fixed bottom-10 right-10 z-[100] bg-emerald-500 text-white px-8 py-4 rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.5)] font-black italic uppercase tracking-widest animate-in slide-in-from-bottom-10 fade-in duration-300 flex items-center gap-4 text-lg">
-          <span className="text-2xl animate-spin-slow">🌟</span>
-          <span>¡Misión Cumplida! Has ganado XP</span>
-        </div>
-      )}
     </div>
   );
 }

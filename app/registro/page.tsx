@@ -141,7 +141,7 @@ export default function RegistroPage() {
           <UploadButton 
             endpoint="techAttachment" 
             onClientUploadComplete={(res) => { 
-              if (res) { setAvatarPreview(res[0].url); setError(''); }
+              if (res) { setAvatarPreview(res[0].ufsUrl); setError(''); }
             }} 
             onUploadError={(e) => setError(e.message)} 
             appearance={{ button: "text-xs bg-blue-500/10 text-blue-400 font-bold px-4 py-3 rounded-xl cursor-pointer hover:bg-blue-500/20 transition-all border border-blue-500/20 w-auto", allowedContent: "hidden" }} 

@@ -19,7 +19,6 @@ export default function MiPerfilPage() {
   const [myPosts, setMyPosts] = useState<any[]>([]);
   const [savedPosts, setSavedPosts] = useState<any[]>([]);
 
-  // Campos de formulario para ajustes
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [bio, setBio] = useState("");
@@ -60,7 +59,6 @@ export default function MiPerfilPage() {
     return () => unsub();
   }, [router]);
 
-  // Suscripción en Tiempo Real (WebSockets)
   useEffect(() => {
     if (!user?.email) return;
 
@@ -104,17 +102,10 @@ export default function MiPerfilPage() {
         bio, github_url: github, portfolio_url: portfolio
       });
 
-      // DETECTAMOS SI EL BACKEND DEVOLVIÓ EL ERROR DE NOMBRE DUPLICADO
       if (result && result.error) {
-        Swal.fire({
-          title: 'No se pudo actualizar',
-          text: result.error, // "El nombre de usuario ya está en uso..."
-          icon: 'error',
-          background: '#1a1d24',
-          color: '#fff'
-        });
+        Swal.fire({ title: 'No se pudo actualizar', text: result.error, icon: 'error', background: '#1a1d24', color: '#fff' });
         setIsSaving(false);
-        return; // IMPORTANTE: Esto detiene la función para que no salga el toast de éxito
+        return;
       }
 
       const p = await getUserProfile(user.email);

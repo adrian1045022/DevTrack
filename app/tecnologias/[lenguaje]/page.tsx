@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use, useEffect, useRef, useCallback } from "react";
+import { useState, use, useEffect, useCallback } from "react";
 import NoteRenderer from "../../../components/NoteRenderer";
 import { auth } from '../../../lib/firebase'; 
 import { onAuthStateChanged } from 'firebase/auth';
